@@ -11,11 +11,10 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:executableTalk.openPresentation",
     "onLanguage:markdown",
     "workspaceContains:**/*.deck.md"
   ],
-  "main": "./out/src/extension.js",
+  "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
