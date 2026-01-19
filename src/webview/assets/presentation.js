@@ -53,7 +53,7 @@
   function setupKeyboardNavigation() {
     document.addEventListener('keydown', function (event) {
       // Prevent default for navigation keys
-      const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Escape', 'Space'];
+      const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Escape', ' ', 'Backspace'];
       if (navKeys.includes(event.key)) {
         event.preventDefault();
       }
@@ -61,13 +61,14 @@
       switch (event.key) {
         case 'ArrowRight':
         case 'ArrowDown':
-        case 'Space':
+        case ' ':  // Space key
         case 'PageDown':
           navigateNext();
           break;
 
         case 'ArrowLeft':
         case 'ArrowUp':
+        case 'Backspace':
         case 'PageUp':
           navigatePrevious();
           break;
@@ -127,7 +128,10 @@
         if (actionId) {
           sendMessage({
             type: 'executeAction',
-            actionId: actionId,
+            payload: {
+              actionId: actionId,
+            },
+            messageId: generateMessageId(),
           });
           
           // Add running state
@@ -145,6 +149,13 @@
     // Format: action:type?params
     // We use the href as the ID if no explicit ID
     return href;
+  }
+
+  /**
+   * Generate unique message ID
+   */
+  function generateMessageId() {
+    return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
 
   /**
@@ -183,38 +194,38 @@
    */
   function navigateNext() {
     if (currentSlide < totalSlides - 1) {
-      sendMessage({ type: 'navigate', direction: 'next' });
+      sendMessage({ type: 'navigate', payload: { direction: 'next' } });
     }
   }
 
   function navigatePrevious() {
     if (currentSlide > 0) {
-      sendMessage({ type: 'navigate', direction: 'previous' });
+      sendMessage({ type: 'navigate', payload: { direction: 'prev' } });
     }
   }
 
   function navigateFirst() {
     if (currentSlide !== 0) {
-      sendMessage({ type: 'navigate', direction: 'first' });
+      sendMessage({ type: 'navigate', payload: { direction: 'first' } });
     }
   }
 
   function navigateLast() {
     if (currentSlide !== totalSlides - 1) {
-      sendMessage({ type: 'navigate', direction: 'last' });
+      sendMessage({ type: 'navigate', payload: { direction: 'last' } });
     }
   }
 
   function closePresentation() {
-    sendMessage({ type: 'close' });
+    sendMessage({ type: 'close', payload: {} });
   }
 
   function undo() {
-    sendMessage({ type: 'undo' });
+    sendMessage({ type: 'undo', payload: {} });
   }
 
   function redo() {
-    sendMessage({ type: 'redo' });
+    sendMessage({ type: 'redo', payload: {} });
   }
 
   /**
@@ -264,11 +275,14 @@
    * Message handlers
    */
   function handleSlideChanged(message) {
-    currentSlide = message.slideIndex;
-    totalSlides = message.totalSlides || totalSlides;
+    const payload = message.payload || message;
+    currentSlide = payload.slideIndex;
+    totalSlides = payload.totalSlides || totalSlides;
     
-    if (message.slideContent) {
-      slideContent.innerHTML = message.slideContent;
+    if (payload.slideHtml) {
+      slideContent.innerHTML = payload.slideHtml;
+    } else if (payload.slideContent) {
+      slideContent.innerHTML = payload.slideContent;
     } else if (slides[currentSlide]) {
       slideContent.innerHTML = slides[currentSlide].content || '';
     }
@@ -278,14 +292,16 @@
   }
 
   function handleDeckLoaded(message) {
-    totalSlides = message.totalSlides;
-    slides = message.slides || slides;
+    const payload = message.payload || message;
+    totalSlides = payload.totalSlides;
+    slides = payload.slides || slides;
     showSlide(0);
   }
 
   function handleActionStatusChanged(message) {
-    const actionId = message.actionId;
-    const status = message.status;
+    const payload = message.payload || message;
+    const actionId = payload.actionId;
+    const status = payload.status;
     
     // Find action link(s) with this ID
     const links = document.querySelectorAll(`a[data-action-id="${actionId}"], a[href="${actionId}"]`);
@@ -314,14 +330,16 @@
   }
 
   function handleError(message) {
-    console.error('Presentation error:', message.error, message.message);
-    showActionOverlay('Error: ' + message.message, 'error');
+    const payload = message.payload || message;
+    console.error('Presentation error:', payload.error, payload.message);
+    showActionOverlay('Error: ' + payload.message, 'error');
     setTimeout(hideActionOverlay, 3000);
   }
 
   function handleTrustStatusChanged(message) {
+    const payload = message.payload || message;
     // Could update UI to show trust status
-    console.log('Trust status changed:', message.isTrusted);
+    console.log('Trust status changed:', payload.isTrusted);
   }
 
   /**

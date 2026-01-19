@@ -185,7 +185,6 @@ export class WebviewProvider implements vscode.Disposable {
     const handlers: MessageHandlers = {
       onNavigate: (msg: NavigateMessage) => {
         const direction = msg.payload.direction === 'prev' ? 'previous' : 
-                         msg.payload.direction === 'goto' ? 'next' : 
                          msg.payload.direction as 'next' | 'previous' | 'first' | 'last';
         this.callbacks?.onNavigate(direction, msg.payload.slideIndex);
       },

@@ -28,12 +28,16 @@ export class EditorHighlightExecutor extends BaseActionExecutor implements Actio
       throw new ValidationError('editor.highlight', 'path', 'path is required and must be a string');
     }
 
-    if (!params.lines || typeof params.lines !== 'string') {
+    // Lines can be string or number (number if it's a single line like "20")
+    if (params.lines === undefined || params.lines === null || params.lines === '') {
       throw new ValidationError('editor.highlight', 'lines', 'lines is required (e.g., "10-20" or "10")');
     }
 
+    // Convert to string for validation
+    const linesStr = String(params.lines);
+
     // Validate lines format
-    const linesMatch = params.lines.match(/^(\d+)(?:-(\d+))?$/);
+    const linesMatch = linesStr.match(/^(\d+)(?:-(\d+))?$/);
     if (!linesMatch) {
       throw new ValidationError('editor.highlight', 'lines', 'lines must be in format "N" or "N-M"');
     }
@@ -59,8 +63,9 @@ export class EditorHighlightExecutor extends BaseActionExecutor implements Actio
         ? params.path
         : path.join(context.workspaceRoot, params.path);
 
-      // Parse line range
-      const linesMatch = params.lines.match(/^(\d+)(?:-(\d+))?$/);
+      // Parse line range (convert to string in case it was parsed as number)
+      const linesStr = String(params.lines);
+      const linesMatch = linesStr.match(/^(\d+)(?:-(\d+))?$/);
       if (!linesMatch) {
         return this.failure('Invalid lines format', startTime);
       }
