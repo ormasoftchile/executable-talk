@@ -310,22 +310,35 @@ export class Conductor implements vscode.Disposable {
       return;
     }
 
+    this.outputChannel.appendLine(`[DEBUG] Executing action: ${actionId}`);
+
     // Capture snapshot before action
     const snapshot = this.snapshotFactory.capture(this.currentSlideIndex, `Before action ${actionId}`);
     this.stateStack.push(snapshot);
 
     // Find action by ID
     const slide = this.deck.slides[this.currentSlideIndex];
+    
+    this.outputChannel.appendLine(`[DEBUG] Current slide index: ${this.currentSlideIndex}`);
+    this.outputChannel.appendLine(`[DEBUG] Interactive elements: ${slide.interactiveElements.length}`);
+    for (const el of slide.interactiveElements) {
+      this.outputChannel.appendLine(`[DEBUG]   Element: id=${el.action.id}, rawLink=${el.rawLink}`);
+    }
+    
     const action = this.findActionById(slide, actionId);
 
     if (action) {
-      await this.executeAction(action);
+      this.outputChannel.appendLine(`[DEBUG] Found action: ${action.type}`);
+      await this.executeAction(action, actionId);
     } else {
+      this.outputChannel.appendLine(`[DEBUG] Action not found!`);
       this.webviewProvider.sendError({
         code: 'UNKNOWN_ACTION',
         message: `Action "${actionId}" not found`,
         recoverable: true,
       });
+      // Also update the action status to failed so button stops spinning
+      this.webviewProvider.sendActionStatusChanged(actionId, 'failed', 'Action not found');
     }
   }
 
@@ -379,7 +392,10 @@ export class Conductor implements vscode.Disposable {
 
     // Check interactive elements
     for (const element of slide.interactiveElements) {
-      if (element.action.id === actionId || element.rawLink === actionId) {
+      // Match by action ID, rawLink (full markdown), or action href (action:type?params)
+      if (element.action.id === actionId || 
+          element.rawLink === actionId ||
+          element.rawLink.includes(`(${actionId})`)) {
         return element.action;
       }
     }
@@ -389,16 +405,19 @@ export class Conductor implements vscode.Disposable {
 
   private async executeSlideActions(slide: Slide): Promise<void> {
     for (const action of slide.onEnterActions) {
-      await this.executeAction(action);
+      await this.executeAction(action, action.id);
     }
   }
 
-  private async executeAction(action: Action): Promise<void> {
+  private async executeAction(action: Action, webviewActionId?: string): Promise<void> {
+    // Use the webview-friendly ID for status updates (falls back to action.id)
+    const statusId = webviewActionId || action.id;
+    
     // Check trust for restricted actions
     const requiresTrust = TRUSTED_ACTION_TYPES.includes(action.type);
     if (requiresTrust && !isTrusted()) {
       this.webviewProvider.sendActionStatusChanged(
-        action.id,
+        statusId,
         'failed',
         'Action requires workspace trust'
       );
@@ -411,7 +430,7 @@ export class Conductor implements vscode.Disposable {
 
     if (!executor) {
       this.webviewProvider.sendActionStatusChanged(
-        action.id,
+        statusId,
         'failed',
         `Unknown action type: ${action.type}`
       );
@@ -419,7 +438,7 @@ export class Conductor implements vscode.Disposable {
     }
 
     // Execute action
-    this.webviewProvider.sendActionStatusChanged(action.id, 'running');
+    this.webviewProvider.sendActionStatusChanged(statusId, 'running');
 
     // Create cancellation token for this action
     this.cancellationTokenSource?.dispose();
@@ -438,7 +457,7 @@ export class Conductor implements vscode.Disposable {
       const result = await executor.execute(action, context);
 
       if (result.success) {
-        this.webviewProvider.sendActionStatusChanged(action.id, 'success');
+        this.webviewProvider.sendActionStatusChanged(statusId, 'success');
         
         // Track opened resources
         if (action.type === 'file.open' && typeof action.params.path === 'string') {
@@ -446,14 +465,14 @@ export class Conductor implements vscode.Disposable {
         }
       } else {
         this.webviewProvider.sendActionStatusChanged(
-          action.id,
+          statusId,
           'failed',
           result.error
         );
       }
     } catch (error) {
       this.webviewProvider.sendActionStatusChanged(
-        action.id,
+        statusId,
         'failed',
         error instanceof Error ? error.message : 'Unknown error'
       );
