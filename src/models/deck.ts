@@ -6,6 +6,29 @@
 import { Slide } from './slide';
 
 /**
+ * Toolbar button identifiers
+ */
+export type ToolbarButton = 'sidebar' | 'panel' | 'terminal' | 'activityBar' | 'zenMode';
+
+/**
+ * Presentation display options from frontmatter
+ */
+export interface PresentationOptions {
+  /** Show/hide the floating toolbar */
+  toolbar?: boolean | ToolbarButton[];
+  /** Enable/disable Zen Mode on presentation start */
+  zenMode?: boolean;
+  /** Show slide numbers in navigation */
+  showSlideNumbers?: boolean;
+  /** Show progress bar */
+  showProgress?: boolean;
+  /** Font size: small, medium, large */
+  fontSize?: 'small' | 'medium' | 'large';
+  /** Theme override */
+  theme?: 'dark' | 'light';
+}
+
+/**
  * Deck-level metadata from frontmatter
  */
 export interface DeckMetadata {
@@ -13,6 +36,8 @@ export interface DeckMetadata {
   title?: string;
   /** Author name */
   author?: string;
+  /** Presentation display options */
+  options?: PresentationOptions;
   /** Additional properties */
   [key: string]: unknown;
 }
