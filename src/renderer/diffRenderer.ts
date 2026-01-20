@@ -70,19 +70,22 @@ async function renderGitDiff(
   params: DiffRenderParams
 ): Promise<DiffRenderResult> {
   const filePath = params.path!;
-  const before = params.before || 'HEAD~1';
-  const after = params.after; // undefined means working tree
+  const before = params.before; // undefined means compare working tree to HEAD
+  const after = params.after;   // undefined means working tree
   const context = params.context ?? 3;
 
   // Build git diff command
   const args = ['diff', `--unified=${context}`, '--no-color'];
   
-  if (after) {
+  if (before && after) {
     // Compare two refs
     args.push(`${before}..${after}`, '--', filePath);
-  } else {
-    // Compare ref to working tree
+  } else if (before) {
+    // Compare specific ref to working tree
     args.push(before, '--', filePath);
+  } else {
+    // No ref specified: show working tree changes (staged + unstaged vs HEAD)
+    args.push('HEAD', '--', filePath);
   }
 
   const result = await runGitCommand(args, workspaceRoot);
