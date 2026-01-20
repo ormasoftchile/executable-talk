@@ -1,0 +1,193 @@
+/**
+ * Presenter View Styles
+ * For speaker notes and next slide preview panel
+ */
+
+/* Base layout */
+body {
+  font-family: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+  margin: 0;
+  padding: 16px;
+  background: var(--vscode-editor-background, #1e1e1e);
+  color: var(--vscode-editor-foreground, #cccccc);
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: auto 1fr 1fr;
+  gap: 16px;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+/* Header with slide counter and clock */
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+}
+
+.slide-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--vscode-foreground, #cccccc);
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slide-counter {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.clock {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 24px;
+  color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+/* Section labels */
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--vscode-descriptionForeground, #9d9d9d);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+/* Current slide section - spans two rows */
+.current-slide {
+  grid-row: 2 / 4;
+  overflow: auto;
+  background: var(--vscode-editorWidget-background, #252526);
+  border: 1px solid var(--vscode-panel-border, #3c3c3c);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.current-slide .slide-content {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.current-slide .slide-content h1 {
+  font-size: 28px;
+  margin-top: 0;
+}
+
+.current-slide .slide-content h2 {
+  font-size: 22px;
+}
+
+.current-slide .slide-content h3 {
+  font-size: 18px;
+}
+
+.current-slide .slide-content code {
+  background: var(--vscode-textCodeBlock-background, #1e1e1e);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.current-slide .slide-content pre {
+  background: var(--vscode-textCodeBlock-background, #1e1e1e);
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.current-slide .slide-content pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Speaker notes section */
+.speaker-notes {
+  overflow: auto;
+  background: var(--vscode-input-background, #3c3c3c);
+  border: 1px solid var(--vscode-inputOption-activeBorder, #007acc);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.notes-content {
+  font-size: 18px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  font-family: var(--vscode-font-family, system-ui);
+}
+
+.no-notes {
+  color: var(--vscode-descriptionForeground, #9d9d9d);
+  font-style: italic;
+}
+
+/* Next slide preview */
+.next-preview {
+  overflow: hidden;
+  background: var(--vscode-editorWidget-background, #252526);
+  border: 1px solid var(--vscode-panel-border, #3c3c3c);
+  border-radius: 6px;
+  padding: 12px;
+  opacity: 0.8;
+}
+
+.next-preview:hover {
+  opacity: 1;
+}
+
+.preview-content {
+  transform: scale(0.65);
+  transform-origin: top left;
+  pointer-events: none;
+  font-size: 12px;
+}
+
+.no-next {
+  color: var(--vscode-descriptionForeground, #9d9d9d);
+  font-style: italic;
+  font-size: 14px;
+  padding: 20px;
+  text-align: center;
+}
+
+/* Scrollbar styling for WebKit */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.1));
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(121, 121, 121, 0.7));
+}
+
+/* Responsive adjustments for smaller panels */
+@media (max-width: 600px) {
+  body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr 1fr;
+  }
+
+  .current-slide {
+    grid-row: auto;
+  }
+
+  .clock {
+    font-size: 18px;
+  }
+}
