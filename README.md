@@ -6,6 +6,7 @@ Transform your Markdown presentations into live coding demonstrations with VS Co
 
 - **Navigate Slides**: Use arrow keys to navigate between slides in a full-screen presentation view
 - **Execute Actions**: Click on action links to open files, highlight code, run terminal commands, or start debug sessions
+- **Dynamic Content**: Embed live file contents, command output, and git diffs directly in your slides
 - **Undo/Redo**: Recover from demo failures by undoing IDE changes with `Cmd+Z` / `Ctrl+Z`
 - **Zen Mode**: Presentations automatically enter distraction-free Zen Mode
 - **Presenter View**: Open speaker notes and next slide preview on a secondary panel
@@ -154,6 +155,97 @@ Executes multiple actions in order.
 | Parameter | Description | Required |
 |-----------|-------------|----------|
 | `actions` | Comma-separated list of URL-encoded actions | Yes |
+
+## Dynamic Content Rendering
+
+Embed live content directly in your slides using render directives. These are invisible links that get replaced with actual content when the slide is displayed.
+
+### `render:file`
+
+Embed file contents with optional line range.
+
+```markdown
+[](render:file?path=src/main.ts&lines=1-20)
+```
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `path` | Relative path to the file | Yes |
+| `lines` | Line range (e.g., `1-20` or `5`) | No |
+| `lang` | Language for syntax highlighting | No (auto-detected) |
+| `format` | Output format: `code`, `quote`, or `raw` | No (default: `code`) |
+
+**Examples:**
+
+```markdown
+# Show the first 10 lines of package.json
+[](render:file?path=package.json&lines=1-10)
+
+# Show a specific function with TypeScript highlighting
+[](render:file?path=src/utils.ts&lines=25-40&lang=typescript)
+```
+
+### `render:command`
+
+Execute a command and embed its output. **Requires Workspace Trust.**
+
+```markdown
+[](render:command?cmd=npm%20--version)
+```
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `cmd` | URL-encoded command to execute | Yes |
+| `cwd` | Working directory for the command | No |
+| `timeout` | Timeout in milliseconds | No (default: 30000) |
+| `format` | Output format: `code`, `json`, or `raw` | No (default: `code`) |
+| `cached` | Cache output between renders | No (default: `true`) |
+
+**Examples:**
+
+```markdown
+# Show npm version
+[](render:command?cmd=npm%20--version)
+
+# List source files
+[](render:command?cmd=ls%20-la%20src/)
+
+# Show git status
+[](render:command?cmd=git%20status%20--short)
+```
+
+### `render:diff`
+
+Show git diffs or file comparisons.
+
+```markdown
+[](render:diff?path=src/main.ts&before=HEAD~1)
+```
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `path` | File to show git diff for | Yes* |
+| `before` | Git ref to compare against (e.g., `HEAD~1`, `main`) | No (default: `HEAD`) |
+| `after` | Git ref to compare to | No (default: working tree) |
+| `left` | Left file for file-to-file diff | Yes* |
+| `right` | Right file for file-to-file diff | Yes* |
+| `mode` | Display mode: `unified` or `split` | No (default: `unified`) |
+| `context` | Number of context lines | No (default: 3) |
+
+*Either `path` OR both `left` and `right` are required.
+
+**Examples:**
+
+```markdown
+# Show recent changes to a file
+[](render:diff?path=src/main.ts&before=HEAD~3)
+
+# Compare two files
+[](render:diff?left=old/config.json&right=new/config.json)
+
+# Show changes since a specific branch
+[](render:diff?path=src/feature.ts&before=main)
+```
 
 ## Speaker Notes
 
