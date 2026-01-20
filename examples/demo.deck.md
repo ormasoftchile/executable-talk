@@ -3,6 +3,11 @@ title: Demo Presentation
 author: Test User
 ---
 
+[Open Settings](action:vscode.command?id=workbench.action.openSettings)
+
+[Search Extensions](action:vscode.command?id=workbench.extensions.search&args=%22markdown%22)
+
+[Toggle Sidebar](action:vscode.command?id=workbench.action.toggleSidebarVisibility)
 # Welcome to Executable Talk! 🎉
 
 Press **→** or **Space** to navigate forward.
