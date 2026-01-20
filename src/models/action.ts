@@ -11,7 +11,8 @@ export type ActionType =
   | 'editor.highlight'
   | 'terminal.run'
   | 'debug.start'
-  | 'sequence';
+  | 'sequence'
+  | 'vscode.command';
 
 /**
  * Execution status of an action
@@ -106,6 +107,16 @@ export interface SequenceParams {
 }
 
 /**
+ * Parameters for vscode.command action
+ */
+export interface VscodeCommandParams {
+  /** VS Code command ID (e.g., 'workbench.action.openSettings') */
+  id: string;
+  /** Optional arguments for the command (JSON string or array) */
+  args?: string | unknown[];
+}
+
+/**
  * Action parameters union type
  */
 export type ActionParams =
@@ -113,7 +124,8 @@ export type ActionParams =
   | EditorHighlightParams
   | TerminalRunParams
   | DebugStartParams
-  | SequenceParams;
+  | SequenceParams
+  | VscodeCommandParams;
 
 /**
  * Action definition as it appears in YAML frontmatter
