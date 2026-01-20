@@ -3,17 +3,10 @@ title: Demo Presentation
 author: Test User
 ---
 
-[Open Settings](action:vscode.command?id=workbench.action.openSettings)
-
-[Search Extensions](action:vscode.command?id=workbench.extensions.search&args=%22markdown%22)
-
-[Toggle Sidebar](action:vscode.command?id=workbench.action.toggleSidebarVisibility)
 # Welcome to Executable Talk! 🎉
 
 Press **→** or **Space** to navigate forward.
 
----
-notes: This slide demonstrates file opening. Click the link below.
 ---
 
 # Opening Files
@@ -35,8 +28,6 @@ Highlight specific lines in a file:
 [Highlight line 20](action:editor.highlight?path=package.json&lines=20)
 
 ---
-notes: Terminal commands require Workspace Trust!
----
 
 # Terminal Commands
 
@@ -47,11 +38,7 @@ Run a command in the terminal:
 [List files](action:terminal.run?command=ls%20-la)
 
 ---
-[Open Settings](action:vscode.command?id=workbench.action.openSettings)
 
-[Search Extensions](action:vscode.command?id=workbench.extensions.search&args=%22markdown%22)
-
-[Toggle Sidebar](action:vscode.command?id=workbench.action.toggleSidebarVisibility)
 # Sequences
 
 Execute multiple actions in order:
@@ -84,7 +71,7 @@ Execute a command and embed its output:
 
 View git diffs directly in your slides:
 
-[](render:diff?path=src/renderer/contentRenderer.ts&before=HEAD~3)
+[](render:diff?path=package.json&before=HEAD~1)
 
 ---
 
