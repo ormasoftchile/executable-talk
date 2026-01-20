@@ -43,9 +43,9 @@ Run a command in the terminal:
 
 Execute any VS Code command directly:
 
-[Open Settings](action:vscode.command?id=workbench.action.openSettings)
+[Open Settings (filtered to "font")](action:vscode.command?id=workbench.action.openSettings&args=%22font%22)
 
-[Search Extensions](action:vscode.command?id=workbench.extensions.search&args=%22markdown%22)
+[Search Markdown Extensions](action:vscode.command?id=workbench.extensions.search&args=%22markdown%22)
 
 [Toggle Sidebar](action:vscode.command?id=workbench.action.toggleSidebarVisibility)
 
