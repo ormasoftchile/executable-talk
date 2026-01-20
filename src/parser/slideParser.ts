@@ -7,6 +7,7 @@ import matter from 'gray-matter';
 import MarkdownIt from 'markdown-it';
 import { Slide, SlideFrontmatter, createSlide } from '../models/slide';
 import { parseActionLinks } from './actionLinkParser';
+import { parseRenderDirectives } from '../renderer';
 
 // Initialize markdown-it renderer
 const md = new MarkdownIt({
@@ -94,6 +95,15 @@ function parseSlideContent(index: number, rawContent: string): Slide {
   // Parse interactive action links from content
   const interactiveElements = parseActionLinks(content, index);
   slide.interactiveElements = interactiveElements;
+  
+  // Parse render directives from content
+  const directives = parseRenderDirectives(content, index);
+  slide.renderDirectives = directives.map(d => ({
+    id: d.id,
+    type: d.type,
+    rawDirective: d.rawDirective,
+    position: d.position,
+  }));
   
   return slide;
 }

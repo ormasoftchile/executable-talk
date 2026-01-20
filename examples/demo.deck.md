@@ -49,6 +49,15 @@ Execute multiple actions in order:
 
 [Open and Highlight](action:sequence?actions=file.open%3Fpath%3Dpackage.json,editor.highlight%3Fpath%3Dpackage.json%26lines%3D1-5)
 
+
+---
+
+# Dynamic Content Rendering
+
+Embed file content directly in slides:
+
+[](render:file?path=package.json&lines=2-4)
+
 ---
 
 # The End
