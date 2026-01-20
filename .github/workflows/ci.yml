@@ -18,6 +18,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
 
     - name: Configure Git line endings
       if: runner.os == 'Windows'
