@@ -13,6 +13,7 @@ export { EditorHighlightExecutor, clearAllDecorations } from './editorHighlightE
 export { TerminalRunExecutor, disposeAllTerminals } from './terminalRunExecutor';
 export { DebugStartExecutor } from './debugStartExecutor';
 export { SequenceExecutor } from './sequenceExecutor';
+export { VscodeCommandExecutor } from './vscodeCommandExecutor';
 
 // Pipeline
 export { executeWithPipeline, actionRequiresTrust, createExecutionContext } from './executionPipeline';
@@ -24,6 +25,7 @@ import { EditorHighlightExecutor } from './editorHighlightExecutor';
 import { TerminalRunExecutor } from './terminalRunExecutor';
 import { DebugStartExecutor } from './debugStartExecutor';
 import { SequenceExecutor } from './sequenceExecutor';
+import { VscodeCommandExecutor } from './vscodeCommandExecutor';
 
 /**
  * Register all action executors
@@ -36,4 +38,5 @@ export function registerAllExecutors(): void {
   registry.register(new TerminalRunExecutor());
   registry.register(new DebugStartExecutor());
   registry.register(new SequenceExecutor());
+  registry.register(new VscodeCommandExecutor());
 }

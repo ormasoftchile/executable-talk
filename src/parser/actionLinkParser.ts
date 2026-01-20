@@ -21,6 +21,7 @@ const VALID_ACTION_TYPES: ActionType[] = [
   'terminal.run',
   'debug.start',
   'sequence',
+  'vscode.command',
 ];
 
 /**
