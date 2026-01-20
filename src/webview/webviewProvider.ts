@@ -262,6 +262,10 @@ export class WebviewProvider implements vscode.Disposable {
       },
     });
 
+    // Build theme and fontSize classes
+    const themeClass = options.theme === 'light' ? 'theme-light' : 'theme-dark';
+    const fontSizeClass = `font-${(options.fontSize as string) || 'medium'}`;
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -271,7 +275,7 @@ export class WebviewProvider implements vscode.Disposable {
   <link href="${cssUri}" rel="stylesheet">
   <title>Presentation</title>
 </head>
-<body>
+<body class="${themeClass} ${fontSizeClass}">
   <div id="presentation-container">
     <div id="slide-container">
       <div id="slide-content"></div>

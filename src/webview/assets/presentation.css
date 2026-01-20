@@ -15,6 +15,42 @@
   --running-color: #ff9800;
 }
 
+/* Light theme overrides */
+body.theme-light {
+  --bg-color: #ffffff;
+  --fg-color: #1e1e1e;
+  --accent-color: #0066b8;
+  --accent-hover: #0055a0;
+  --border-color: #d4d4d4;
+  --nav-bg: rgba(255, 255, 255, 0.9);
+  --overlay-bg: rgba(255, 255, 255, 0.9);
+}
+
+/* Font size variants */
+body.font-small {
+  font-size: 12px;
+}
+
+body.font-small #slide-content h1 { font-size: 2rem; }
+body.font-small #slide-content h2 { font-size: 1.6rem; }
+body.font-small #slide-content h3 { font-size: 1.2rem; }
+body.font-small #slide-content p,
+body.font-small #slide-content li { font-size: 1rem; }
+
+body.font-medium {
+  font-size: 14px;
+}
+
+body.font-large {
+  font-size: 18px;
+}
+
+body.font-large #slide-content h1 { font-size: 3.5rem; }
+body.font-large #slide-content h2 { font-size: 2.8rem; }
+body.font-large #slide-content h3 { font-size: 2rem; }
+body.font-large #slide-content p,
+body.font-large #slide-content li { font-size: 1.5rem; }
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -26,7 +62,6 @@ html, body {
   height: 100%;
   overflow: hidden;
   font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-  font-size: var(--vscode-font-size, 14px);
   background-color: var(--bg-color);
   color: var(--fg-color);
 }
