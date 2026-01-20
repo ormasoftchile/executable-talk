@@ -241,8 +241,8 @@ export class WebviewProvider implements vscode.Disposable {
     const nonce = this.getNonce();
 
     // Get presentation options from metadata
-    const options = this.currentDeck?.metadata?.options ?? {};
-    const toolbarConfig = this.getToolbarHtml(options.toolbar);
+    const options = (this.currentDeck?.metadata?.options ?? {}) as Record<string, unknown>;
+    const toolbarConfig = this.getToolbarHtml(options.toolbar as boolean | string[] | undefined);
 
     // Serialize deck for webview
     const deckJson = JSON.stringify({
