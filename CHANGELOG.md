@@ -5,6 +5,24 @@ All notable changes to the Executable Talk extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-01-20
+
+### Added
+
+- **Dynamic Content Rendering**: Embed live content in slides
+  - `render:file` - Embed file contents with optional line ranges
+  - `render:command` - Execute commands and display output (streaming)
+  - `render:diff` - Show git diffs with syntax highlighting
+
+- **VS Code Command Action**: Execute any VS Code command
+  - `action:vscode.command?id=workbench.action.openSettings`
+  - Supports optional JSON arguments
+  - Requires Workspace Trust for security
+
+### Fixed
+
+- Fixed `&` character encoding issue in render directive URLs
+
 ## [0.1.0] - 2025-01-15
 
 ### Added
