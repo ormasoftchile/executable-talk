@@ -1,6 +1,13 @@
 ---
 title: Demo Presentation
 author: Test User
+options:
+  toolbar:
+    - sidebar
+    - panel
+    - terminal
+    - zenMode
+  zenMode: true
 ---
 
 # Welcome to Executable Talk! 🎉

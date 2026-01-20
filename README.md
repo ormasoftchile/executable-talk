@@ -306,6 +306,40 @@ Slide content goes here...
 
 View speaker notes by running `Executable Talk: Open Presenter View`.
 
+## Presentation Options
+
+Customize the presentation using the `options` field in the deck frontmatter:
+
+```yaml
+---
+title: My Presentation
+author: Your Name
+options:
+  toolbar: true                    # Show toolbar (default: true)
+  zenMode: true                    # Enter Zen Mode on start (default: true)
+  showSlideNumbers: true           # Show slide numbers (default: true)
+  showProgress: false              # Show progress bar (default: false)
+  fontSize: medium                 # Font size: small, medium, large
+  theme: dark                      # Theme: dark, light
+---
+```
+
+### Toolbar Customization
+
+The floating toolbar can be customized to show only specific buttons:
+
+```yaml
+options:
+  toolbar:
+    - sidebar      # Toggle Sidebar
+    - panel        # Toggle Panel
+    - terminal     # Toggle Terminal
+    - activityBar  # Toggle Activity Bar
+    - zenMode      # Toggle Zen Mode
+```
+
+Set `toolbar: false` to hide it completely.
+
 ## Workspace Trust
 
 For security, actions that execute code (`terminal.run` and `debug.start`) require [Workspace Trust](https://code.visualstudio.com/docs/editor/workspace-trust). When opening a presentation with executable actions in an untrusted workspace:

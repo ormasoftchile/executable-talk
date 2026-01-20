@@ -240,6 +240,10 @@ export class WebviewProvider implements vscode.Disposable {
   ): string {
     const nonce = this.getNonce();
 
+    // Get presentation options from metadata
+    const options = this.currentDeck?.metadata?.options ?? {};
+    const toolbarConfig = this.getToolbarHtml(options.toolbar);
+
     // Serialize deck for webview
     const deckJson = JSON.stringify({
       title: this.currentDeck?.title,
@@ -250,6 +254,12 @@ export class WebviewProvider implements vscode.Disposable {
         hasActions: slide.onEnterActions.length > 0 || slide.interactiveElements.length > 0,
         speakerNotes: slide.speakerNotes,
       })),
+      options: {
+        showSlideNumbers: options.showSlideNumbers ?? true,
+        showProgress: options.showProgress ?? false,
+        fontSize: options.fontSize ?? 'medium',
+        theme: options.theme,
+      },
     });
 
     return `<!DOCTYPE html>
@@ -273,24 +283,7 @@ export class WebviewProvider implements vscode.Disposable {
       <button id="btn-next" title="Next slide (→)">▶</button>
       <button id="btn-last" title="Last slide (End)">⏭</button>
     </nav>
-    <div id="toolbar" class="toolbar">
-      <button class="toolbar-btn" data-command="workbench.action.toggleSidebarVisibility" title="Toggle Sidebar (Cmd+B)">
-        <span class="toolbar-icon">◧</span>
-      </button>
-      <button class="toolbar-btn" data-command="workbench.action.togglePanel" title="Toggle Panel (Cmd+J)">
-        <span class="toolbar-icon">◫</span>
-      </button>
-      <button class="toolbar-btn" data-command="workbench.action.terminal.toggleTerminal" title="Toggle Terminal">
-        <span class="toolbar-icon">⌨</span>
-      </button>
-      <button class="toolbar-btn" data-command="workbench.action.toggleActivityBarVisibility" title="Toggle Activity Bar">
-        <span class="toolbar-icon">☰</span>
-      </button>
-      <div class="toolbar-separator"></div>
-      <button class="toolbar-btn" data-command="workbench.action.toggleZenMode" title="Toggle Zen Mode">
-        <span class="toolbar-icon">⛶</span>
-      </button>
-    </div>
+    ${toolbarConfig}
     <div id="action-overlay" class="hidden">
       <div id="action-status"></div>
     </div>
@@ -301,6 +294,50 @@ export class WebviewProvider implements vscode.Disposable {
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+  }
+
+  /**
+   * Generate toolbar HTML based on configuration
+   */
+  private getToolbarHtml(toolbar?: boolean | string[]): string {
+    // If toolbar is explicitly false, return empty
+    if (toolbar === false) {
+      return '';
+    }
+
+    // Define all available toolbar buttons
+    const allButtons = {
+      sidebar: '<button class="toolbar-btn" data-command="workbench.action.toggleSidebarVisibility" title="Toggle Sidebar (Cmd+B)"><span class="toolbar-icon">◧</span></button>',
+      panel: '<button class="toolbar-btn" data-command="workbench.action.togglePanel" title="Toggle Panel (Cmd+J)"><span class="toolbar-icon">◫</span></button>',
+      terminal: '<button class="toolbar-btn" data-command="workbench.action.terminal.toggleTerminal" title="Toggle Terminal"><span class="toolbar-icon">⌨</span></button>',
+      activityBar: '<button class="toolbar-btn" data-command="workbench.action.toggleActivityBarVisibility" title="Toggle Activity Bar"><span class="toolbar-icon">☰</span></button>',
+      zenMode: '<button class="toolbar-btn" data-command="workbench.action.toggleZenMode" title="Toggle Zen Mode"><span class="toolbar-icon">⛶</span></button>',
+    };
+
+    let buttons: string[];
+    
+    if (Array.isArray(toolbar)) {
+      // Use specified buttons only
+      buttons = toolbar
+        .filter(btn => btn in allButtons)
+        .map(btn => allButtons[btn as keyof typeof allButtons]);
+    } else {
+      // Default: all buttons with separator before zenMode
+      buttons = [
+        allButtons.sidebar,
+        allButtons.panel,
+        allButtons.terminal,
+        allButtons.activityBar,
+        '<div class="toolbar-separator"></div>',
+        allButtons.zenMode,
+      ];
+    }
+
+    if (buttons.length === 0) {
+      return '';
+    }
+
+    return `<div id="toolbar" class="toolbar">${buttons.join('\n      ')}</div>`;
   }
 
   private getNonce(): string {
