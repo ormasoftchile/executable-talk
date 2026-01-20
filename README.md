@@ -33,7 +33,7 @@ This is your first slide!
 
 Click the action link to see it in action:
 
-[Open Main File](action:file.open?file=src/main.ts)
+[Open Main File](action:file.open?path=src/main.ts)
 
 ---
 
@@ -41,7 +41,7 @@ Click the action link to see it in action:
 
 Draw attention to specific lines:
 
-[Highlight the function](action:editor.highlight?file=src/main.ts&lines=5-10)
+[Highlight the function](action:editor.highlight?path=src/main.ts&lines=5-10)
 
 ---
 notes: Remember to explain the architecture diagram!
