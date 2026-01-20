@@ -567,6 +567,7 @@ export class Conductor implements vscode.Disposable {
     }
 
     // Resolve each directive
+    // Resolve each directive
     const resolvedBlocks = await Promise.all(
       directives.map(d => resolveDirective(d))
     );
@@ -579,26 +580,21 @@ export class Conductor implements vscode.Disposable {
       const directive = directives[i];
       const block = resolvedBlocks[i];
       
-      // Escape special regex characters in the raw directive
-      const escapedDirective = directive.rawDirective
-        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Extract the URL from the raw directive [label](url) -> url
+      const urlMatch = directive.rawDirective.match(/\(([^)]+)\)/);
+      if (!urlMatch) {
+        continue;
+      }
       
-      // Find the rendered link in HTML and replace with block
-      // The markdown renderer turns [label](render:...) into <a href="render:...">label</a>
-      // We need to match the specific URL from the directive
-      const linkPattern = new RegExp(
-        `<a\\s+href="${escapedDirective.replace(/^\[([^\]]*)\]\(/, '').replace(/\)$/, '')}"[^>]*>${directive.label || ''}</a>`
-      );
+      // The URL in HTML has & encoded as &amp;
+      const url = urlMatch[1].replace(/&/g, '&amp;');
+      const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       
-      // Try to replace
-      if (linkPattern.test(html)) {
-        html = html.replace(linkPattern, block.html);
-      } else {
-        // Fallback: try matching by the full URL
-        const urlPart = directive.rawDirective.match(/\(([^)]+)\)/)?.[1] || '';
-        const escapedUrl = urlPart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const fallbackPattern = new RegExp(`<a\\s+href="${escapedUrl}"[^>]*>[^<]*</a>`);
-        html = html.replace(fallbackPattern, block.html);
+      // Match <a href="url">label</a> - the markdown renderer creates this
+      const pattern = new RegExp(`<a\\s+href="${escapedUrl}"[^>]*>[^<]*</a>`);
+      
+      if (pattern.test(html)) {
+        html = html.replace(pattern, block.html);
       }
     }
 

@@ -71,6 +71,14 @@ Execute a command and embed its output:
 
 ---
 
+# Diff Rendering
+
+View git diffs directly in your slides:
+
+[](render:diff?path=src/extension.ts)
+
+---
+
 # The End
 
 Press **Escape** to exit.
