@@ -26,6 +26,84 @@ body.theme-light {
   --overlay-bg: rgba(255, 255, 255, 0.9);
 }
 
+/* Light theme - render blocks */
+body.theme-light .render-block {
+  background-color: #ffffff;
+  border-color: #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .render-block-header {
+  background-color: #fafafa;
+  border-bottom-color: #e0e0e0;
+  color: #333333;
+}
+
+body.theme-light .render-block-content {
+  color: #1e1e1e;
+  background: none !important;
+}
+
+body.theme-light .render-block-content code {
+  color: #1e1e1e;
+  background: none !important;
+}
+
+body.theme-light .render-block pre.render-block-content {
+  background: none !important;
+}
+
+body.theme-light .render-block pre code {
+  background: none !important;
+}
+
+body.theme-light .render-block-code .render-block-content {
+  background-color: transparent;
+}
+
+body.theme-light .render-block-actions button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+body.theme-light .render-block-command.render-block-success {
+  border-left: 3px solid var(--success-color);
+}
+
+body.theme-light .render-block-command.render-block-success .render-block-header {
+  background-color: #fafafa;
+}
+
+body.theme-light .render-block-command.render-block-error {
+  border-left: 3px solid var(--error-color);
+}
+
+body.theme-light .render-block-command.render-block-error .render-block-header {
+  background-color: #fafafa;
+}
+
+body.theme-light .render-block-error .render-block-header {
+  background-color: #fafafa;
+}
+
+/* Light theme - code blocks */
+body.theme-light #slide-content code {
+  background: none;
+  color: #1e1e1e;
+  border: 1px solid #d0d0d0;
+  padding: 0.1em 0.3em;
+}
+
+body.theme-light #slide-content pre {
+  background: none;
+  border: 1px solid #d0d0d0;
+  color: #1e1e1e;
+}
+
+body.theme-light #slide-content pre code {
+  border: none;
+  padding: 0;
+}
+
 /* Font size variants */
 body.font-small {
   font-size: 12px;
@@ -676,4 +754,64 @@ html, body {
 
 .diff-split td.diff-line-deletion {
   background-color: rgba(244, 67, 54, 0.15);
+}
+/* ============================================
+   Fragment Animations
+   ============================================ */
+
+/* Base fragment state - hidden */
+.fragment {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s 0.4s;
+}
+
+/* Visible fragment */
+.fragment.visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s;
+}
+
+/* Fade animation (default) */
+.fragment[data-fragment-animation="fade"] {
+  /* Just opacity, handled by base styles */
+}
+
+/* Slide-up animation */
+.fragment[data-fragment-animation="slide-up"] {
+  transform: translateY(30px);
+}
+
+.fragment[data-fragment-animation="slide-up"].visible {
+  transform: translateY(0);
+}
+
+/* Slide-left animation */
+.fragment[data-fragment-animation="slide-left"] {
+  transform: translateX(30px);
+}
+
+.fragment[data-fragment-animation="slide-left"].visible {
+  transform: translateX(0);
+}
+
+/* Zoom animation */
+.fragment[data-fragment-animation="zoom"] {
+  transform: scale(0.8);
+}
+
+.fragment[data-fragment-animation="zoom"].visible {
+  transform: scale(1);
+}
+
+/* Highlight animation - element is visible but dimmed, gets highlighted */
+.fragment[data-fragment-animation="highlight"] {
+  opacity: 0.4 !important;
+  visibility: visible !important;
+}
+
+.fragment[data-fragment-animation="highlight"].visible {
+  opacity: 1 !important;
+  background-color: rgba(255, 255, 0, 0.2);
 }

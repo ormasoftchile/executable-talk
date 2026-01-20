@@ -63,6 +63,8 @@ export interface Slide {
   interactiveElements: InteractiveElement[];
   /** Render directives for dynamic content */
   renderDirectives: RenderDirectiveRef[];
+  /** Number of animated fragments in this slide */
+  fragmentCount: number;
 }
 
 /**
@@ -93,5 +95,6 @@ export function createSlide(
     onEnterActions: [],
     interactiveElements: [],
     renderDirectives: [],
+    fragmentCount: 0,
   };
 }
