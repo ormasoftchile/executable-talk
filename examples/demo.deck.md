@@ -94,6 +94,24 @@ View git diffs directly in your slides:
 
 ---
 
+# Presentation Options
+
+Customize via frontmatter `options`:
+
+```yaml
+options:
+  toolbar: true | false | [buttons]
+  zenMode: true | false
+  showSlideNumbers: true | false
+  showProgress: true | false
+  fontSize: small | medium | large
+  theme: dark | light
+```
+
+**Toolbar buttons:** `sidebar`, `panel`, `terminal`, `activityBar`, `zenMode`
+
+---
+
 # The End
 
 Press **Escape** to exit.
