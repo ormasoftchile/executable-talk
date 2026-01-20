@@ -8,7 +8,8 @@ options:
     - terminal
     - zenMode
   zenMode: true
-theme: light
+  theme: light
+  fontSize: large
 ---
 
 # Welcome to Executable Talk! 🎉
@@ -110,6 +111,29 @@ options:
 ```
 
 **Toolbar buttons:** `sidebar`, `panel`, `terminal`, `activityBar`, `zenMode`
+
+---
+
+# Fragment Animations
+
+Build bullet points one at a time:
+
+- First point appears <!-- .fragment -->
+- Then the second <!-- .fragment -->
+- And finally the third! <!-- .fragment -->
+
+Use `<!-- .fragment -->` after any element.
+
+---
+
+# Animation Types
+
+Different animation styles:
+
+- Fade in (default) <!-- .fragment fade -->
+- Slide up from below <!-- .fragment slide-up -->
+- Zoom in <!-- .fragment zoom -->
+- Already visible, gets highlighted <!-- .fragment highlight -->
 
 ---
 

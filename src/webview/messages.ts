@@ -17,6 +17,8 @@ export interface NavigateMessage {
   payload: {
     direction: 'next' | 'prev' | 'first' | 'last' | 'goto';
     slideIndex?: number;
+    /** When navigating backwards, show all fragments on the target slide */
+    showAllFragments?: boolean;
   };
 }
 
@@ -102,6 +104,10 @@ export interface SlideChangedMessage {
     totalSlides: number;
     canUndo: boolean;
     canRedo: boolean;
+    /** Show all fragments (when navigating backwards) */
+    showAllFragments?: boolean;
+    /** Total number of fragments in this slide */
+    fragmentCount?: number;
   };
 }
 

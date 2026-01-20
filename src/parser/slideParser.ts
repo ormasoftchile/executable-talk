@@ -8,6 +8,7 @@ import MarkdownIt from 'markdown-it';
 import { Slide, SlideFrontmatter, createSlide } from '../models/slide';
 import { parseActionLinks } from './actionLinkParser';
 import { parseRenderDirectives } from '../renderer';
+import { processFragments } from './fragmentProcessor';
 
 // Initialize markdown-it renderer
 const md = new MarkdownIt({
@@ -87,10 +88,15 @@ function parseSlideContent(index: number, rawContent: string): Slide {
   }
   
   // Render markdown to HTML
-  const html = md.render(content);
+  let html = md.render(content);
+  
+  // Process fragments and get count
+  const { html: fragmentHtml, fragmentCount } = processFragments(html);
+  html = fragmentHtml;
   
   // Create base slide
   const slide = createSlide(index, content, html, frontmatter);
+  slide.fragmentCount = fragmentCount;
   
   // Parse interactive action links from content
   const interactiveElements = parseActionLinks(content, index);

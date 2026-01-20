@@ -14,7 +14,6 @@ import { getActionRegistry } from '../actions/registry';
 import { isTrusted, onTrustChanged } from '../utils/workspaceTrust';
 import { enterZenMode, exitZenMode, resetZenModeState } from '../utils/zenMode';
 import { parseRenderDirectives, resolveDirective } from '../renderer';
-import MarkdownIt from 'markdown-it';
 
 /**
  * Actions that require workspace trust
@@ -32,7 +31,6 @@ export class Conductor implements vscode.Disposable {
   private webviewProvider: WebviewProvider;
   private presenterViewProvider: PresenterViewProvider;
   private disposables: vscode.Disposable[] = [];
-  private md: MarkdownIt;
   private outputChannel: vscode.OutputChannel;
   private cancellationTokenSource: vscode.CancellationTokenSource | undefined;
 
@@ -41,11 +39,6 @@ export class Conductor implements vscode.Disposable {
     this.snapshotFactory = new SnapshotFactory();
     this.webviewProvider = new WebviewProvider(extensionUri);
     this.presenterViewProvider = new PresenterViewProvider(extensionUri);
-    this.md = new MarkdownIt({
-      html: true,
-      linkify: true,
-      typographer: true,
-    });
 
     this.outputChannel = vscode.window.createOutputChannel('Executable Talk');
     this.disposables.push(this.outputChannel);
@@ -90,7 +83,7 @@ export class Conductor implements vscode.Disposable {
 
     // Create webview callbacks
     const callbacks: WebviewCallbacks = {
-      onNavigate: (direction, slideIndex) => this.handleNavigate(direction, slideIndex),
+      onNavigate: (direction, slideIndex, showAllFragments) => this.handleNavigate(direction, slideIndex, showAllFragments),
       onExecuteAction: (actionId) => void this.handleExecuteAction(actionId),
       onUndo: () => this.handleUndo(),
       onRedo: () => this.handleRedo(),
@@ -107,7 +100,7 @@ export class Conductor implements vscode.Disposable {
   /**
    * Navigate to a specific slide
    */
-  async goToSlide(index: number): Promise<void> {
+  async goToSlide(index: number, showAllFragments?: boolean): Promise<void> {
     if (!this.deck) {
       return;
     }
@@ -136,6 +129,8 @@ export class Conductor implements vscode.Disposable {
       slideHtml: resolvedHtml,
       canUndo: this.stateStack.canUndo(),
       canRedo: this.stateStack.canRedo(),
+      showAllFragments,
+      fragmentCount: slide.fragmentCount,
     });
 
     // Sync presenter view if visible
@@ -157,8 +152,8 @@ export class Conductor implements vscode.Disposable {
   /**
    * Navigate to previous slide
    */
-  async previousSlide(): Promise<void> {
-    await this.goToSlide(this.currentSlideIndex - 1);
+  async previousSlide(showAllFragments?: boolean): Promise<void> {
+    await this.goToSlide(this.currentSlideIndex - 1, showAllFragments);
   }
 
   /**
@@ -296,13 +291,13 @@ export class Conductor implements vscode.Disposable {
   // Private methods
   // ============================================================================
 
-  private handleNavigate(direction: 'next' | 'previous' | 'first' | 'last', _slideIndex?: number): void {
+  private handleNavigate(direction: 'next' | 'previous' | 'first' | 'last', _slideIndex?: number, showAllFragments?: boolean): void {
     switch (direction) {
       case 'next':
         void this.nextSlide();
         break;
       case 'previous':
-        void this.previousSlide();
+        void this.previousSlide(showAllFragments);
         break;
       case 'first':
         void this.firstSlide();
@@ -318,28 +313,17 @@ export class Conductor implements vscode.Disposable {
       return;
     }
 
-    this.outputChannel.appendLine(`[DEBUG] Executing action: ${actionId}`);
-
     // Capture snapshot before action
     const snapshot = this.snapshotFactory.capture(this.currentSlideIndex, `Before action ${actionId}`);
     this.stateStack.push(snapshot);
 
     // Find action by ID
     const slide = this.deck.slides[this.currentSlideIndex];
-    
-    this.outputChannel.appendLine(`[DEBUG] Current slide index: ${this.currentSlideIndex}`);
-    this.outputChannel.appendLine(`[DEBUG] Interactive elements: ${slide.interactiveElements.length}`);
-    for (const el of slide.interactiveElements) {
-      this.outputChannel.appendLine(`[DEBUG]   Element: id=${el.action.id}, rawLink=${el.rawLink}`);
-    }
-    
     const action = this.findActionById(slide, actionId);
 
     if (action) {
-      this.outputChannel.appendLine(`[DEBUG] Found action: ${action.type}`);
       await this.executeAction(action, actionId);
     } else {
-      this.outputChannel.appendLine(`[DEBUG] Action not found!`);
       this.webviewProvider.sendError({
         code: 'UNKNOWN_ACTION',
         message: `Action "${actionId}" not found`,
@@ -397,13 +381,10 @@ export class Conductor implements vscode.Disposable {
   }
 
   private renderSlides(): void {
-    if (!this.deck) {
-      return;
-    }
-
-    for (const slide of this.deck.slides) {
-      slide.html = this.md.render(slide.content);
-    }
+    // Note: Slides are already rendered with markdown-it and fragment processing
+    // in slideParser.parseSlideContent(). This method is kept for backward 
+    // compatibility but no longer re-renders the HTML.
+    // The slide.html already contains the processed HTML from the parser.
   }
 
   private findActionById(slide: Slide, actionId: string): Action | undefined {
