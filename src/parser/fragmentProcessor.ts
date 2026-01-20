@@ -17,7 +17,7 @@ export function processFragments(html: string): { html: string; fragmentCount: n
   // The comment appears after the element content, so we wrap the preceding content
   let processedHtml = html.replace(
     /(<li[^>]*>)(.*?)(<!--\s*\.fragment(?:\s+([\w-]+))?\s*-->)/gs,
-    (_match, openTag: string, content: string, _comment, animationType) => {
+    (_match, openTag: string, content: string, _comment: string, animationType: string | undefined) => {
       fragmentIndex++;
       const animation = animationType || 'fade';
       // Add fragment class and data attributes to the li tag
@@ -29,7 +29,7 @@ export function processFragments(html: string): { html: string; fragmentCount: n
   // Also handle other block elements (p, h1-h6, div, blockquote, etc.)
   processedHtml = processedHtml.replace(
     /(<(?:p|h[1-6]|div|blockquote)[^>]*>)(.*?)(<!--\s*\.fragment(?:\s+([\w-]+))?\s*-->)/gs,
-    (_match, openTag: string, content: string, _comment, animationType) => {
+    (_match, openTag: string, content: string, _comment: string, animationType: string | undefined) => {
       fragmentIndex++;
       const animation = animationType || 'fade';
       const tagName = openTag.match(/<(\w+)/)?.[1] || 'p';
