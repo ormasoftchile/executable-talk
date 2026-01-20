@@ -156,6 +156,33 @@ Executes multiple actions in order.
 |-----------|-------------|----------|
 | `actions` | Comma-separated list of URL-encoded actions | Yes |
 
+### `vscode.command`
+
+Executes any VS Code command. **Requires Workspace Trust.**
+
+```markdown
+[Open Settings](action:vscode.command?id=workbench.action.openSettings)
+```
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `id` | VS Code command ID | Yes |
+| `args` | URL-encoded JSON arguments | No |
+
+**Examples:**
+
+```markdown
+[Open Settings](action:vscode.command?id=workbench.action.openSettings)
+
+[Toggle Sidebar](action:vscode.command?id=workbench.action.toggleSidebarVisibility)
+
+[Search Extensions](action:vscode.command?id=workbench.extensions.search&args=%22python%22)
+
+[Focus Terminal](action:vscode.command?id=workbench.action.terminal.focus)
+
+[Open Keyboard Shortcuts](action:vscode.command?id=workbench.action.openGlobalKeybindings)
+```
+
 ## Dynamic Content Rendering
 
 Embed live content directly in your slides using render directives. These are invisible links that get replaced with actual content when the slide is displayed.

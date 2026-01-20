@@ -77,6 +77,18 @@ View git diffs directly in your slides:
 
 ---
 
+# VS Code Commands
+
+Execute any VS Code command:
+
+[Open Settings](action:vscode.command?id=workbench.action.openSettings)
+
+[Toggle Sidebar](action:vscode.command?id=workbench.action.toggleSidebarVisibility)
+
+[Search Extensions](action:vscode.command?id=workbench.extensions.search&args=%22markdown%22)
+
+---
+
 # The End
 
 Press **Escape** to exit.
