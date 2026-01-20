@@ -453,3 +453,137 @@ html, body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* Diff blocks */
+.render-block-diff {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em;
+}
+
+.render-block-diff .diff-content {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.diff-empty {
+  padding: 1rem;
+  color: var(--secondary-color);
+  font-style: italic;
+  text-align: center;
+}
+
+/* Unified diff view */
+.diff-unified {
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-hunk-header {
+  background-color: rgba(0, 120, 215, 0.1);
+  color: var(--secondary-color);
+  padding: 0.25rem 0.5rem;
+  font-style: italic;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.diff-line {
+  display: flex;
+  line-height: 1.4;
+}
+
+.diff-line-num {
+  min-width: 3em;
+  padding: 0 0.5rem;
+  text-align: right;
+  color: var(--secondary-color);
+  background-color: rgba(0, 0, 0, 0.1);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.diff-line-num-old {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.diff-line-prefix {
+  width: 1.5em;
+  text-align: center;
+  flex-shrink: 0;
+  font-weight: bold;
+}
+
+.diff-line-content {
+  flex: 1;
+  padding: 0 0.5rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Addition lines */
+.diff-line-addition {
+  background-color: rgba(76, 175, 80, 0.15);
+}
+
+.diff-line-addition .diff-line-prefix {
+  color: var(--success-color);
+}
+
+/* Deletion lines */
+.diff-line-deletion {
+  background-color: rgba(244, 67, 54, 0.15);
+}
+
+.diff-line-deletion .diff-line-prefix {
+  color: var(--error-color);
+}
+
+/* Context lines */
+.diff-line-context {
+  background-color: transparent;
+}
+
+.diff-line-context .diff-line-prefix {
+  color: var(--secondary-color);
+}
+
+/* Split diff view */
+.diff-split {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.diff-split td {
+  padding: 0 0.5rem;
+  vertical-align: top;
+  line-height: 1.4;
+}
+
+.diff-split .diff-line-num {
+  min-width: 3em;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.diff-split .diff-line-content {
+  width: 50%;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-split .diff-hunk-header-row td {
+  background-color: rgba(0, 120, 215, 0.1);
+  color: var(--secondary-color);
+  font-style: italic;
+  padding: 0.25rem 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.diff-split td.diff-line-addition {
+  background-color: rgba(76, 175, 80, 0.15);
+}
+
+.diff-split td.diff-line-deletion {
+  background-color: rgba(244, 67, 54, 0.15);
+}
