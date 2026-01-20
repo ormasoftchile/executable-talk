@@ -25,6 +25,14 @@ export {
 } from './commandRenderer';
 
 export {
+  renderDiff,
+  parseDiff,
+  DiffRenderResult,
+  DiffHunk,
+  DiffLine,
+} from './diffRenderer';
+
+export {
   resolveDirective,
   RenderedBlock,
 } from './contentRenderer';
