@@ -579,20 +579,27 @@ export class Conductor implements vscode.Disposable {
       const directive = directives[i];
       const block = resolvedBlocks[i];
       
+      // Escape special regex characters in the raw directive
+      const escapedDirective = directive.rawDirective
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
       // Find the rendered link in HTML and replace with block
       // The markdown renderer turns [label](render:...) into <a href="render:...">label</a>
+      // We need to match the specific URL from the directive
       const linkPattern = new RegExp(
-        `<a\\s+href="render:${directive.type}[^"]*"[^>]*>[^<]*</a>`,
-        'g'
+        `<a\\s+href="${escapedDirective.replace(/^\[([^\]]*)\]\(/, '').replace(/\)$/, '')}"[^>]*>${directive.label || ''}</a>`
       );
-      html = html.replace(linkPattern, block.html);
       
-      // Also handle empty labels which become <a href="..."></a>
-      const emptyLinkPattern = new RegExp(
-        `<a\\s+href="render:${directive.type}[^"]*"[^>]*></a>`,
-        'g'
-      );
-      html = html.replace(emptyLinkPattern, block.html);
+      // Try to replace
+      if (linkPattern.test(html)) {
+        html = html.replace(linkPattern, block.html);
+      } else {
+        // Fallback: try matching by the full URL
+        const urlPart = directive.rawDirective.match(/\(([^)]+)\)/)?.[1] || '';
+        const escapedUrl = urlPart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const fallbackPattern = new RegExp(`<a\\s+href="${escapedUrl}"[^>]*>[^<]*</a>`);
+        html = html.replace(fallbackPattern, block.html);
+      }
     }
 
     return html;

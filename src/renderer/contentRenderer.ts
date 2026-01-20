@@ -2,8 +2,9 @@
  * Content renderer - resolves render directives to HTML
  */
 
-import { RenderDirective, FileRenderDirective } from './renderDirectiveParser';
+import { RenderDirective, FileRenderDirective, CommandRenderDirective } from './renderDirectiveParser';
 import { renderFile } from './fileRenderer';
+import { renderCommand } from './commandRenderer';
 
 /**
  * Rendered content block ready for display
@@ -27,7 +28,7 @@ export async function resolveDirective(directive: RenderDirective): Promise<Rend
     case 'file':
       return resolveFileDirective(directive);
     case 'command':
-      return resolveCommandDirective(directive.id);
+      return resolveCommandDirective(directive);
     case 'diff':
       return resolveDiffDirective(directive.id);
     default: {
@@ -68,10 +69,30 @@ async function resolveFileDirective(directive: FileRenderDirective): Promise<Ren
 }
 
 /**
- * Resolve command directive (placeholder for M2)
+ * Resolve command directive
  */
-async function resolveCommandDirective(id: string): Promise<RenderedBlock> {
-  return createErrorBlock(id, 'render:command not yet implemented');
+async function resolveCommandDirective(directive: CommandRenderDirective): Promise<RenderedBlock> {
+  const result = await renderCommand(directive.params);
+  
+  if (!result.success) {
+    return createErrorBlock(directive.id, result.error || 'Failed to execute command');
+  }
+  
+  const html = formatAsCommandBlock(
+    result.output || '',
+    directive.params.cmd,
+    result.exitCode ?? 0,
+    directive.params.format || 'code'
+  );
+  
+  return {
+    id: directive.id,
+    type: 'command',
+    html,
+    metadata: {
+      source: directive.params.cmd,
+    },
+  };
 }
 
 /**
@@ -125,6 +146,41 @@ function formatAsCodeBlock(
         </div>
       </div>
       <pre class="render-block-content"><code class="language-${language}">${escapedContent}</code></pre>
+    </div>
+  `;
+}
+
+/**
+ * Format command output as a block
+ */
+function formatAsCommandBlock(
+  output: string,
+  command: string,
+  exitCode: number,
+  format: 'code' | 'json' | 'raw' = 'code'
+): string {
+  const escapedOutput = escapeHtml(output);
+  const statusIcon = exitCode === 0 ? '✓' : '✗';
+  const statusClass = exitCode === 0 ? 'success' : 'error';
+  const header = `⚡ ${command}`;
+  
+  if (format === 'raw') {
+    return `<div class="render-block-raw">${escapedOutput}</div>`;
+  }
+  
+  const language = format === 'json' ? 'json' : 'plaintext';
+  
+  return `
+    <div class="render-block render-block-command render-block-${statusClass}" data-type="command" data-exit-code="${exitCode}">
+      <div class="render-block-header">
+        <span class="render-block-source">${escapeHtml(header)}</span>
+        <span class="render-block-status">${statusIcon}</span>
+        <div class="render-block-actions">
+          <button class="render-action-refresh" title="Re-run">↻</button>
+          <button class="render-action-copy" title="Copy">📋</button>
+        </div>
+      </div>
+      <pre class="render-block-content"><code class="language-${language}">${escapedOutput}</code></pre>
     </div>
   `;
 }

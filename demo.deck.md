@@ -59,6 +59,16 @@ Embed file content directly in slides:
 
 ---
 
+# Command Output Rendering
+
+Execute a command and embed its output:
+
+[](render:command?cmd=npm%20--version)
+
+[](render:command?cmd=ls%20-la%20src/)
+
+---
+
 # The End
 
 Press **Escape** to exit.

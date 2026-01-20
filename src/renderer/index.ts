@@ -20,6 +20,11 @@ export {
 } from './fileRenderer';
 
 export {
+  renderCommand,
+  CommandRenderResult,
+} from './commandRenderer';
+
+export {
   resolveDirective,
   RenderedBlock,
 } from './contentRenderer';
