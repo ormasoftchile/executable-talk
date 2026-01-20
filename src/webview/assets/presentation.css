@@ -407,3 +407,49 @@ html, body {
   white-space: pre-wrap;
   font-family: var(--vscode-editor-font-family, monospace);
 }
+
+/* Command blocks */
+.render-block-command .render-block-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.render-block-command .render-block-status {
+  font-size: 1rem;
+}
+
+.render-block-command.render-block-success .render-block-status {
+  color: var(--success-color);
+}
+
+.render-block-command.render-block-error .render-block-status {
+  color: var(--error-color);
+}
+
+.render-block-command.render-block-success {
+  border-color: var(--success-color);
+}
+
+.render-block-command.render-block-success .render-block-header {
+  background-color: rgba(76, 175, 80, 0.1);
+}
+
+.render-block-command.render-block-error {
+  border-color: var(--error-color);
+}
+
+.render-block-command.render-block-error .render-block-header {
+  background-color: rgba(244, 67, 54, 0.1);
+}
+
+/* Streaming indicator */
+.render-block-streaming .render-block-status::after {
+  content: '⏳';
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
