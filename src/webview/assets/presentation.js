@@ -13,6 +13,8 @@
   let currentSlide = 0;
   let totalSlides = 0;
   let slides = [];
+  let currentFragment = 0;  // Current fragment index (0 = no fragments shown)
+  let totalFragments = 0;   // Total fragments in current slide
 
   // DOM elements
   const slideContent = document.getElementById('slide-content');
@@ -214,17 +216,26 @@
   }
 
   /**
-   * Navigation functions
+   * Navigation functions - with fragment support
    */
   function navigateNext() {
-    if (currentSlide < totalSlides - 1) {
+    console.log('[Nav] navigateNext - currentFragment:', currentFragment, 'totalFragments:', totalFragments);
+    // If there are unrevealed fragments, reveal the next one
+    if (currentFragment < totalFragments) {
+      revealNextFragment();
+    } else if (currentSlide < totalSlides - 1) {
+      // All fragments shown, go to next slide
       sendMessage({ type: 'navigate', payload: { direction: 'next' } });
     }
   }
 
   function navigatePrevious() {
-    if (currentSlide > 0) {
-      sendMessage({ type: 'navigate', payload: { direction: 'prev' } });
+    // If there are revealed fragments, hide the last one
+    if (currentFragment > 0) {
+      hideLastFragment();
+    } else if (currentSlide > 0) {
+      // No fragments shown, go to previous slide
+      sendMessage({ type: 'navigate', payload: { direction: 'prev', showAllFragments: true } });
     }
   }
 
@@ -253,6 +264,57 @@
   }
 
   /**
+   * Fragment navigation functions
+   */
+  function revealNextFragment() {
+    if (currentFragment >= totalFragments) return;
+    
+    currentFragment++;
+    const fragment = slideContent.querySelector(`[data-fragment="${currentFragment}"]`);
+    if (fragment) {
+      fragment.classList.add('visible');
+    }
+    updateNavigationButtons();
+  }
+
+  function hideLastFragment() {
+    if (currentFragment <= 0) return;
+    
+    const fragment = slideContent.querySelector(`[data-fragment="${currentFragment}"]`);
+    if (fragment) {
+      fragment.classList.remove('visible');
+    }
+    currentFragment--;
+    updateNavigationButtons();
+  }
+
+  function showAllFragments() {
+    const fragments = slideContent.querySelectorAll('.fragment');
+    fragments.forEach(function(fragment) {
+      fragment.classList.add('visible');
+    });
+    currentFragment = totalFragments;
+    updateNavigationButtons();
+  }
+
+  function hideAllFragments() {
+    const fragments = slideContent.querySelectorAll('.fragment');
+    fragments.forEach(function(fragment) {
+      fragment.classList.remove('visible');
+    });
+    currentFragment = 0;
+    updateNavigationButtons();
+  }
+
+  function updateFragmentState() {
+    // Count fragments in current slide
+    const fragments = slideContent.querySelectorAll('.fragment');
+    totalFragments = fragments.length;
+    currentFragment = 0;
+    console.log('[Fragments] Found', totalFragments, 'fragments in slide', currentSlide);
+  }
+
+  /**
    * Show a specific slide
    */
   function showSlide(index) {
@@ -270,6 +332,10 @@
 
     // Update content
     slideContent.innerHTML = slide.content || '';
+    console.log('[showSlide] Set slide', index, 'content. HTML contains .fragment?', slideContent.innerHTML.includes('fragment'));
+
+    // Reset fragment state
+    updateFragmentState();
 
     // Update indicator
     updateSlideIndicator();
@@ -289,9 +355,10 @@
    * Update navigation button states
    */
   function updateNavigationButtons() {
-    btnFirst.disabled = currentSlide === 0;
-    btnPrev.disabled = currentSlide === 0;
-    btnNext.disabled = currentSlide >= totalSlides - 1;
+    btnFirst.disabled = currentSlide === 0 && currentFragment === 0;
+    btnPrev.disabled = currentSlide === 0 && currentFragment === 0;
+    // Next is available if there are fragments to show OR more slides
+    btnNext.disabled = currentSlide >= totalSlides - 1 && currentFragment >= totalFragments;
     btnLast.disabled = currentSlide >= totalSlides - 1;
   }
 
@@ -303,12 +370,23 @@
     currentSlide = payload.slideIndex;
     totalSlides = payload.totalSlides || totalSlides;
     
+    console.log('[handleSlideChanged] Received slide', currentSlide);
+    
     if (payload.slideHtml) {
       slideContent.innerHTML = payload.slideHtml;
+      console.log('[handleSlideChanged] Set slideHtml. Contains fragment?', payload.slideHtml.includes('class="fragment"'));
     } else if (payload.slideContent) {
       slideContent.innerHTML = payload.slideContent;
     } else if (slides[currentSlide]) {
       slideContent.innerHTML = slides[currentSlide].content || '';
+    }
+    
+    // Update fragment state
+    updateFragmentState();
+    
+    // If navigating back, show all fragments
+    if (payload.showAllFragments) {
+      showAllFragments();
     }
     
     updateSlideIndicator();
