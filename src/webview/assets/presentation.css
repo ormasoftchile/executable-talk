@@ -234,6 +234,61 @@ html, body {
   text-align: center;
 }
 
+/* Toolbar */
+.toolbar {
+  position: absolute;
+  right: 1rem;
+  bottom: 5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background-color: var(--nav-bg);
+  padding: 0.5rem;
+  border-radius: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 50;
+}
+
+#presentation-container:hover .toolbar {
+  opacity: 1;
+}
+
+.toolbar-btn {
+  background-color: transparent;
+  color: var(--fg-color);
+  border: 1px solid var(--border-color);
+  width: 36px;
+  height: 36px;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar-btn:hover {
+  background-color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+.toolbar-btn:active {
+  transform: scale(0.95);
+}
+
+.toolbar-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.toolbar-separator {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 0.25rem 0;
+}
+
 /* Action Overlay */
 #action-overlay {
   position: absolute;

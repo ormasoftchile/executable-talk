@@ -96,6 +96,7 @@ export class Conductor implements vscode.Disposable {
       onRedo: () => this.handleRedo(),
       onClose: () => void this.close(),
       onReady: () => this.handleReady(),
+      onVscodeCommand: (commandId, args) => void this.handleVscodeCommand(commandId, args),
     };
 
     // Show presentation
@@ -355,6 +356,22 @@ export class Conductor implements vscode.Disposable {
 
   private handleRedo(): void {
     void this.redo();
+  }
+
+  /**
+   * Handle VS Code command execution from toolbar
+   */
+  private async handleVscodeCommand(commandId: string, args?: unknown[]): Promise<void> {
+    try {
+      if (args && args.length > 0) {
+        await vscode.commands.executeCommand(commandId, ...args);
+      } else {
+        await vscode.commands.executeCommand(commandId);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.outputChannel.appendLine(`[Conductor] Failed to execute command '${commandId}': ${message}`);
+    }
   }
 
   private handleReady(): void {

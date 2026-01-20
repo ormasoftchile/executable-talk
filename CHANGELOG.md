@@ -5,6 +5,18 @@ All notable changes to the Executable Talk extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-01-20
+
+### Added
+
+- **Floating Toolbar**: Quick-access toolbar in presentation view
+  - Toggle Sidebar visibility
+  - Toggle Panel visibility
+  - Toggle Terminal
+  - Toggle Activity Bar
+  - Toggle Zen Mode
+  - Appears on hover, positioned bottom-right
+
 ## [0.1.7] - 2026-01-20
 
 ### Added
