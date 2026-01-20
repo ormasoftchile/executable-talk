@@ -39,6 +39,18 @@ Run a command in the terminal:
 
 ---
 
+# VS Code Commands
+
+Execute any VS Code command directly:
+
+[Open Settings](action:vscode.command?id=workbench.action.openSettings)
+
+[Search Extensions](action:vscode.command?id=workbench.extensions.search&args=%22markdown%22)
+
+[Toggle Sidebar](action:vscode.command?id=workbench.action.toggleSidebarVisibility)
+
+---
+
 # Sequences
 
 Execute multiple actions in order:
