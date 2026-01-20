@@ -1,1 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="16" fill="#007ACC"/><text x="64" y="80" font-size="64" text-anchor="middle" fill="white">▶</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+    <linearGradient id="play" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f093fb"/>
+      <stop offset="100%" style="stop-color:#f5576c"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="24" fill="url(#bg)"/>
+  <rect x="20" y="28" width="88" height="64" rx="6" fill="white" opacity="0.95"/>
+  <rect x="28" y="38" width="40" height="4" rx="2" fill="#667eea" opacity="0.6"/>
+  <rect x="28" y="48" width="56" height="4" rx="2" fill="#667eea" opacity="0.4"/>
+  <rect x="28" y="58" width="32" height="4" rx="2" fill="#667eea" opacity="0.6"/>
+  <rect x="28" y="68" width="48" height="4" rx="2" fill="#667eea" opacity="0.4"/>
+  <rect x="28" y="78" width="24" height="4" rx="2" fill="#667eea" opacity="0.6"/>
+  <circle cx="88" cy="72" r="20" fill="url(#play)"/>
+  <polygon points="82,62 82,82 98,72" fill="white"/>
+  <circle cx="52" cy="102" r="4" fill="white" opacity="0.9"/>
+  <circle cx="64" cy="102" r="4" fill="white" opacity="0.5"/>
+  <circle cx="76" cy="102" r="4" fill="white" opacity="0.5"/>
+</svg>

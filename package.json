@@ -13,6 +13,7 @@
     "url": "https://github.com/ormasoftchile/executable-talk/issues"
   },
   "homepage": "https://github.com/ormasoftchile/executable-talk#readme",
+  "icon": "resources/icon.png",
   "galleryBanner": {
     "color": "#1e1e1e",
     "theme": "dark"
