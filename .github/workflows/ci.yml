@@ -158,9 +158,11 @@ jobs:
 
     - name: Auto version bump (patch)
       if: "contains(github.event.head_commit.message, '[version:patch]')"
+      id: version_patch
       run: |
         npm run version:patch
         NEW_VERSION=$(node -p "require('./package.json').version")
+        echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
         git add package.json package-lock.json
         git commit -m "chore: bump version to ${NEW_VERSION} [skip ci]"
         git tag "v${NEW_VERSION}"
@@ -168,9 +170,11 @@ jobs:
 
     - name: Auto version bump (minor)  
       if: "contains(github.event.head_commit.message, '[version:minor]')"
+      id: version_minor
       run: |
         npm run version:minor
         NEW_VERSION=$(node -p "require('./package.json').version")
+        echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
         git add package.json package-lock.json
         git commit -m "chore: bump version to ${NEW_VERSION} [skip ci]"
         git tag "v${NEW_VERSION}"
@@ -178,30 +182,39 @@ jobs:
 
     - name: Auto version bump (major)
       if: "contains(github.event.head_commit.message, '[version:major]')"
+      id: version_major
       run: |
         npm run version:major
         NEW_VERSION=$(node -p "require('./package.json').version")
+        echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
         git add package.json package-lock.json
         git commit -m "chore: bump version to ${NEW_VERSION} [skip ci]"
         git tag "v${NEW_VERSION}"
         git push origin main --tags
 
+    - name: Rebuild VSIX with new version
+      if: contains(github.event.head_commit.message, '[version:')
+      run: |
+        npm run compile
+        npm run package
+
     - name: Create GitHub Release
-      if: startsWith(github.ref, 'refs/tags/v')
+      if: contains(github.event.head_commit.message, '[version:')
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: v${{ steps.version_patch.outputs.new_version || steps.version_minor.outputs.new_version || steps.version_major.outputs.new_version }}
         files: '*.vsix'
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Publish to VS Code Marketplace
-      if: startsWith(github.ref, 'refs/tags/v')
+      if: contains(github.event.head_commit.message, '[version:')
       env:
         VSCE_PAT: ${{ secrets.VSCE_PAT }}
       run: |
         if [ -n "$VSCE_PAT" ]; then
-          npm run deploy
+          npx vsce publish -p $VSCE_PAT
         else
           echo "Skipping VS Code Marketplace publish - VSCE_PAT not configured"
         fi
