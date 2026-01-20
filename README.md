@@ -112,24 +112,24 @@ A floating toolbar appears in the bottom-right corner when you hover over the pr
 Opens a file in the editor.
 
 ```markdown
-[Open File](action:file.open?file=path/to/file.ts)
+[Open File](action:file.open?path=path/to/file.ts)
 ```
 
 | Parameter | Description | Required |
 |-----------|-------------|----------|
-| `file` | Relative path to the file | Yes |
+| `path` | Relative path to the file | Yes |
 
 ### `editor.highlight`
 
 Highlights specific lines in a file.
 
 ```markdown
-[Highlight Code](action:editor.highlight?file=path/to/file.ts&lines=5-10)
+[Highlight Code](action:editor.highlight?path=path/to/file.ts&lines=5-10)
 ```
 
 | Parameter | Description | Required |
 |-----------|-------------|----------|
-| `file` | Relative path to the file | Yes |
+| `path` | Relative path to the file | Yes |
 | `lines` | Line range (e.g., `5-10` or `5`) | Yes |
 
 ### `terminal.run`
