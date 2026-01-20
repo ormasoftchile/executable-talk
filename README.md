@@ -5,6 +5,7 @@ Transform your Markdown presentations into live coding demonstrations with VS Co
 ## Features
 
 - **Navigate Slides**: Use arrow keys to navigate between slides in a full-screen presentation view
+- **Fragment Animations**: Reveal bullet points one at a time with PowerPoint-like animations
 - **Execute Actions**: Click on action links to open files, highlight code, run terminal commands, or start debug sessions
 - **Dynamic Content**: Embed live file contents, command output, and git diffs directly in your slides
 - **Undo/Redo**: Recover from demo failures by undoing IDE changes with `Cmd+Z` / `Ctrl+Z`
@@ -74,8 +75,8 @@ Start a debug session:
 
 | Key | Action |
 |-----|--------|
-| `→` or `Space` | Next slide |
-| `←` or `Backspace` | Previous slide |
+| `→` or `Space` | Next fragment or next slide |
+| `←` or `Backspace` | Previous fragment or previous slide |
 | `Home` | First slide |
 | `End` | Last slide |
 | `Cmd+Z` / `Ctrl+Z` | Undo IDE changes |
@@ -285,6 +286,40 @@ Show git diffs or file comparisons.
 # Show changes since a specific branch
 [](render:diff?path=src/feature.ts&before=main)
 ```
+
+## Fragment Animations
+
+Reveal content step-by-step using fragment markers. Add `<!-- .fragment -->` after any element to make it appear on the next arrow key press:
+
+```markdown
+## Key Features
+
+- First point appears <!-- .fragment -->
+- Then the second <!-- .fragment -->
+- And finally the third! <!-- .fragment -->
+```
+
+### Animation Types
+
+Specify an animation style after `.fragment`:
+
+```markdown
+- Fade in (default) <!-- .fragment fade -->
+- Slide up from below <!-- .fragment slide-up -->
+- Slide in from right <!-- .fragment slide-left -->
+- Zoom in <!-- .fragment zoom -->
+- Dimmed, then highlighted <!-- .fragment highlight -->
+```
+
+| Animation | Effect |
+|-----------|--------|
+| `fade` | Fade in (default) |
+| `slide-up` | Slide up from below |
+| `slide-left` | Slide in from the right |
+| `zoom` | Zoom in from smaller |
+| `highlight` | Visible but dimmed, then highlighted |
+
+Fragments work on list items, paragraphs, headings, and block elements. The syntax is compatible with [Reveal.js](https://revealjs.com/fragments/).
 
 ## Speaker Notes
 
