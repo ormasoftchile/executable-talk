@@ -64,6 +64,17 @@ export interface ReadyMessage {
 }
 
 /**
+ * Execute a VS Code command from toolbar
+ */
+export interface VscodeCommandMessage {
+  type: 'vscodeCommand';
+  payload: {
+    commandId: string;
+    args?: unknown[];
+  };
+}
+
+/**
  * Union of all Webview → Host messages
  */
 export type WebviewToHostMessage =
@@ -72,7 +83,8 @@ export type WebviewToHostMessage =
   | UndoMessage
   | RedoMessage
   | CloseMessage
-  | ReadyMessage;
+  | ReadyMessage
+  | VscodeCommandMessage;
 
 // ============================================================================
 // Extension Host → Webview Messages

@@ -38,6 +38,7 @@
     setupKeyboardNavigation();
     setupButtonNavigation();
     setupActionLinks();
+    setupToolbar();
     setupMessageListener();
 
     // Notify extension we're ready
@@ -137,6 +138,29 @@
           // Add running state
           link.classList.add('running');
           link.classList.remove('success', 'failed');
+        }
+      }
+    });
+  }
+
+  /**
+   * Set up toolbar button click handlers
+   */
+  function setupToolbar() {
+    const toolbar = document.getElementById('toolbar');
+    if (!toolbar) return;
+
+    toolbar.addEventListener('click', function (event) {
+      const button = event.target.closest('.toolbar-btn');
+      if (button) {
+        const commandId = button.dataset.command;
+        if (commandId) {
+          sendMessage({
+            type: 'vscodeCommand',
+            payload: {
+              commandId: commandId,
+            },
+          });
         }
       }
     });

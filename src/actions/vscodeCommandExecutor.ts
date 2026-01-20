@@ -42,7 +42,7 @@ export class VscodeCommandExecutor extends BaseActionExecutor implements ActionE
       if (params.args) {
         if (typeof params.args === 'string') {
           try {
-            const parsed = JSON.parse(decodeURIComponent(params.args));
+            const parsed: unknown = JSON.parse(decodeURIComponent(params.args));
             args = Array.isArray(parsed) ? parsed : [parsed];
           } catch {
             // If not valid JSON, use as single string argument

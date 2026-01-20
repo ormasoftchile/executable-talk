@@ -12,6 +12,7 @@ import {
   TrustStatusChangedPayload,
   NavigateMessage,
   ExecuteActionMessage,
+  VscodeCommandMessage,
 } from './messages';
 import { isWebviewMessage, createMessageDispatcher, MessageHandlers } from './messageHandler';
 import { Deck } from '../models/deck';
@@ -26,6 +27,7 @@ export interface WebviewCallbacks {
   onRedo(): void;
   onClose(): void;
   onReady(): void;
+  onVscodeCommand?(commandId: string, args?: unknown[]): void;
 }
 
 /**
@@ -203,6 +205,9 @@ export class WebviewProvider implements vscode.Disposable {
       onReady: () => {
         this.callbacks?.onReady();
       },
+      onVscodeCommand: (msg: VscodeCommandMessage) => {
+        this.callbacks?.onVscodeCommand?.(msg.payload.commandId, msg.payload.args);
+      },
     };
 
     const dispatcher = createMessageDispatcher(handlers);
@@ -268,6 +273,24 @@ export class WebviewProvider implements vscode.Disposable {
       <button id="btn-next" title="Next slide (→)">▶</button>
       <button id="btn-last" title="Last slide (End)">⏭</button>
     </nav>
+    <div id="toolbar" class="toolbar">
+      <button class="toolbar-btn" data-command="workbench.action.toggleSidebarVisibility" title="Toggle Sidebar (Cmd+B)">
+        <span class="toolbar-icon">◧</span>
+      </button>
+      <button class="toolbar-btn" data-command="workbench.action.togglePanel" title="Toggle Panel (Cmd+J)">
+        <span class="toolbar-icon">◫</span>
+      </button>
+      <button class="toolbar-btn" data-command="workbench.action.terminal.toggleTerminal" title="Toggle Terminal">
+        <span class="toolbar-icon">⌨</span>
+      </button>
+      <button class="toolbar-btn" data-command="workbench.action.toggleActivityBarVisibility" title="Toggle Activity Bar">
+        <span class="toolbar-icon">☰</span>
+      </button>
+      <div class="toolbar-separator"></div>
+      <button class="toolbar-btn" data-command="workbench.action.toggleZenMode" title="Toggle Zen Mode">
+        <span class="toolbar-icon">⛶</span>
+      </button>
+    </div>
     <div id="action-overlay" class="hidden">
       <div id="action-status"></div>
     </div>
