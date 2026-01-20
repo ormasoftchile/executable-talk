@@ -83,7 +83,7 @@ Execute a command and embed its output:
 
 View git diffs directly in your slides:
 
-[](render:diff?path=package.json&before=HEAD~1)
+[](render:diff?path=examples/demo.deck.md&before=HEAD~5)
 
 ---
 
