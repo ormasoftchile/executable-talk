@@ -1,0 +1,15 @@
+.vscode/**
+.vscode-test/**
+src/**
+test/**
+.gitignore
+.eslintrc.json
+tsconfig.json
+**/*.ts
+**/*.map
+node_modules/**
+.specify/**
+specs/**
+*.deck.md
+.github/**
+# Design Specification: Executable Talk.md
