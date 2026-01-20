@@ -538,8 +538,7 @@ export class Conductor implements vscode.Disposable {
     const result = await vscode.window.showWarningMessage(
       message,
       { modal: true },
-      'Proceed',
-      'Cancel'
+      'Proceed'
     );
 
     return result === 'Proceed';

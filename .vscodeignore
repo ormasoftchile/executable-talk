@@ -1,15 +1,20 @@
 .vscode/**
 .vscode-test/**
 src/**
+!src/webview/assets/**
 test/**
 .gitignore
 .eslintrc.json
 tsconfig.json
 **/*.ts
 **/*.map
-node_modules/**
 .specify/**
 specs/**
 *.deck.md
 .github/**
 # Design Specification: Executable Talk.md
+
+# Include production dependencies
+!node_modules
+!node_modules/gray-matter/**
+!node_modules/markdown-it/**
