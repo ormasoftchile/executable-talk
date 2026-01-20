@@ -5,6 +5,24 @@ All notable changes to the Executable Talk extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2026-01-20
+
+### Added
+
+- **Fragment Animations**: Reveal content step-by-step like PowerPoint
+  - Use `<!-- .fragment -->` syntax after any element
+  - Animation types: fade, slide-up, slide-left, zoom, highlight
+  - Arrow keys reveal/hide fragments before advancing slides
+  - Going back shows all fragments visible on previous slide
+  - Reveal.js compatible syntax for easy migration
+
+- **Theme Support**: Light and dark theme options
+  - Set `theme: light` or `theme: dark` in frontmatter
+  - Proper styling for all elements in both themes
+
+- **Font Size Options**: Configurable presentation font size
+  - Set `fontSize: small`, `medium`, or `large` in frontmatter
+
 ## [0.1.9] - 2026-01-20
 
 ### Added
