@@ -3,7 +3,7 @@
   "displayName": "Executable Talk",
   "description": "Transform Markdown presentations into executable narratives with interactive code demonstrations",
   "version": "0.1.1",
-  "publisher": "ormasoftchile",
+  "publisher": "focus-space",
   "license": "MIT",
   "repository": {
     "type": "git",
