@@ -13,6 +13,7 @@ import { PresenterViewProvider } from '../webview/presenterViewProvider';
 import { getActionRegistry } from '../actions/registry';
 import { isTrusted, onTrustChanged } from '../utils/workspaceTrust';
 import { enterZenMode, exitZenMode, resetZenModeState } from '../utils/zenMode';
+import { parseRenderDirectives, resolveDirective } from '../renderer';
 import MarkdownIt from 'markdown-it';
 
 /**
@@ -124,11 +125,14 @@ export class Conductor implements vscode.Disposable {
     // Get current slide
     const slide = this.deck.slides[targetIndex];
 
+    // Resolve render directives in slide content
+    const resolvedHtml = await this.resolveSlideRenderDirectives(slide);
+
     // Send slide changed to webview
     this.webviewProvider.sendSlideChanged({
       slideIndex: targetIndex,
       totalSlides: this.deck.slides.length,
-      slideHtml: slide.html,
+      slideHtml: resolvedHtml,
       canUndo: this.stateStack.canUndo(),
       canRedo: this.stateStack.canRedo(),
     });
@@ -186,10 +190,13 @@ export class Conductor implements vscode.Disposable {
         this.deck.currentSlideIndex = snapshot.slideIndex;
         const slide = this.deck.slides[snapshot.slideIndex];
         
+        // Resolve render directives
+        const resolvedHtml = await this.resolveSlideRenderDirectives(slide);
+        
         this.webviewProvider.sendSlideChanged({
           slideIndex: snapshot.slideIndex,
           totalSlides: this.deck.slides.length,
-          slideHtml: slide.html,
+          slideHtml: resolvedHtml,
           canUndo: this.stateStack.canUndo(),
           canRedo: this.stateStack.canRedo(),
         });
@@ -542,5 +549,52 @@ export class Conductor implements vscode.Disposable {
     );
 
     return result === 'Proceed';
+  }
+
+  /**
+   * Resolve render directives in slide content and return updated HTML
+   */
+  private async resolveSlideRenderDirectives(slide: Slide): Promise<string> {
+    // If no render directives, return original HTML
+    if (!slide.renderDirectives || slide.renderDirectives.length === 0) {
+      return slide.html;
+    }
+
+    // Parse the full directives from raw content
+    const directives = parseRenderDirectives(slide.content, slide.index);
+    if (directives.length === 0) {
+      return slide.html;
+    }
+
+    // Resolve each directive
+    const resolvedBlocks = await Promise.all(
+      directives.map(d => resolveDirective(d))
+    );
+
+    // Replace directive placeholders in HTML with rendered content
+    // The directives appear as links in the HTML, we need to replace them
+    let html = slide.html;
+    
+    for (let i = 0; i < directives.length; i++) {
+      const directive = directives[i];
+      const block = resolvedBlocks[i];
+      
+      // Find the rendered link in HTML and replace with block
+      // The markdown renderer turns [label](render:...) into <a href="render:...">label</a>
+      const linkPattern = new RegExp(
+        `<a\\s+href="render:${directive.type}[^"]*"[^>]*>[^<]*</a>`,
+        'g'
+      );
+      html = html.replace(linkPattern, block.html);
+      
+      // Also handle empty labels which become <a href="..."></a>
+      const emptyLinkPattern = new RegExp(
+        `<a\\s+href="render:${directive.type}[^"]*"[^>]*></a>`,
+        'g'
+      );
+      html = html.replace(emptyLinkPattern, block.html);
+    }
+
+    return html;
   }
 }

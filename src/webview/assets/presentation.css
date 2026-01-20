@@ -310,3 +310,100 @@ html, body {
     opacity: 1;
   }
 }
+
+/* ============================================
+   Render Blocks - Dynamic Content Display
+   ============================================ */
+
+.render-block {
+  margin: 1.5rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color);
+}
+
+.render-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.85rem;
+  color: var(--fg-color);
+  opacity: 0.8;
+}
+
+.render-block-source {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.render-block-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.render-block-actions button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  opacity: 0.6;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+
+.render-block-actions button:hover {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.render-block-content {
+  padding: 1rem;
+  margin: 0;
+  overflow-x: auto;
+  font-family: var(--vscode-editor-font-family, 'Fira Code', 'Consolas', monospace);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.render-block-code .render-block-content {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.render-block-code pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.render-block-code code {
+  background: transparent;
+  padding: 0;
+}
+
+.render-block-quote .render-block-content {
+  border-left: 3px solid var(--accent-color);
+  padding-left: 1rem;
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+.render-block-error {
+  border-color: var(--error-color);
+}
+
+.render-block-error .render-block-header {
+  background-color: rgba(244, 67, 54, 0.2);
+}
+
+.render-error-message {
+  color: var(--error-color);
+}
+
+.render-block-raw {
+  white-space: pre-wrap;
+  font-family: var(--vscode-editor-font-family, monospace);
+}

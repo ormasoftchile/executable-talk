@@ -51,6 +51,14 @@ Execute multiple actions in order:
 
 ---
 
+# Dynamic Content Rendering
+
+Embed file content directly in slides:
+
+[](render:file?path=package.json&lines=1-10)
+
+---
+
 # The End
 
 Press **Escape** to exit.

@@ -61,6 +61,18 @@ export interface Slide {
   onEnterActions: Action[];
   /** Clickable action links in content */
   interactiveElements: InteractiveElement[];
+  /** Render directives for dynamic content */
+  renderDirectives: RenderDirectiveRef[];
+}
+
+/**
+ * Reference to a render directive (stores parsed info, resolved at display time)
+ */
+export interface RenderDirectiveRef {
+  id: string;
+  type: 'file' | 'command' | 'diff';
+  rawDirective: string;
+  position: { start: number; end: number };
 }
 
 /**
@@ -80,5 +92,6 @@ export function createSlide(
     speakerNotes: frontmatter?.notes,
     onEnterActions: [],
     interactiveElements: [],
+    renderDirectives: [],
   };
 }
