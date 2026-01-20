@@ -82,6 +82,18 @@ Start a debug session:
 | `Cmd+Shift+Z` / `Ctrl+Y` | Redo IDE changes |
 | `Escape` | Exit presentation |
 
+### Floating Toolbar
+
+A floating toolbar appears in the bottom-right corner when you hover over the presentation. It provides quick access to VS Code workspace toggles:
+
+| Icon | Action |
+|------|--------|
+| ◧ | Toggle Sidebar |
+| ◫ | Toggle Panel |
+| ⌨ | Toggle Terminal |
+| ☰ | Toggle Activity Bar |
+| ⛶ | Toggle Zen Mode |
+
 ### Commands
 
 | Command | Description |

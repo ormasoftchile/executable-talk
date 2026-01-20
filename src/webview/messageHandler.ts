@@ -11,6 +11,7 @@ import {
   RedoMessage,
   CloseMessage,
   ReadyMessage,
+  VscodeCommandMessage,
 } from './messages';
 
 // ============================================================================
@@ -60,6 +61,13 @@ export function isReadyMessage(msg: unknown): msg is ReadyMessage {
 }
 
 /**
+ * Check if message is a vscode command message
+ */
+export function isVscodeCommandMessage(msg: unknown): msg is VscodeCommandMessage {
+  return isMessage(msg) && msg.type === 'vscodeCommand';
+}
+
+/**
  * Base message type check
  */
 function isMessage(msg: unknown): msg is { type: string } {
@@ -94,6 +102,7 @@ export interface MessageHandlers {
   onRedo?: (message: RedoMessage) => void | Promise<void>;
   onClose?: (message: CloseMessage) => void | Promise<void>;
   onReady?: (message: ReadyMessage) => void | Promise<void>;
+  onVscodeCommand?: (message: VscodeCommandMessage) => void | Promise<void>;
 }
 
 /**
@@ -119,6 +128,8 @@ export function createMessageDispatcher(handlers: MessageHandlers) {
         await handlers.onClose(message);
       } else if (isReadyMessage(message) && handlers.onReady) {
         await handlers.onReady(message);
+      } else if (isVscodeCommandMessage(message) && handlers.onVscodeCommand) {
+        await handlers.onVscodeCommand(message);
       } else {
         console.warn('Unhandled message type:', (message as WebviewToHostMessage).type);
       }
@@ -136,7 +147,7 @@ export function parseMessage(data: unknown): WebviewToHostMessage | null {
     return null;
   }
 
-  const validTypes = ['navigate', 'executeAction', 'undo', 'redo', 'close', 'ready'];
+  const validTypes = ['navigate', 'executeAction', 'undo', 'redo', 'close', 'ready', 'vscodeCommand'];
   if (!validTypes.includes(data.type)) {
     return null;
   }
