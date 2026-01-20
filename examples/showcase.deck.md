@@ -89,11 +89,7 @@ Embed live file contents directly in slides!
 
 **The Extension Manifest:**
 
-```render:file
-path=package.json
-lines=1-10
-format=json
-```
+[](render:file?path=package.json&lines=1-10&format=json)
 
 *This content is read live from the file!*
 
@@ -103,11 +99,7 @@ format=json
 
 **TypeScript Code Example:**
 
-```render:file
-path=src/models/action.ts
-lines=1-25
-format=typescript
-```
+[](render:file?path=src/models/action.ts&lines=1-25&format=typescript)
 
 ---
 
@@ -133,15 +125,11 @@ Embed command output directly in slides:
 
 **Current Directory:**
 
-```render:command
-command=pwd
-```
+[](render:command?cmd=pwd)
 
 **Git Branch:**
 
-```render:command
-command=git branch --show-current
-```
+[](render:command?cmd=git%20branch%20--show-current)
 
 ---
 
@@ -149,10 +137,7 @@ command=git branch --show-current
 
 Show what changed in your code:
 
-```render:diff
-ref=HEAD~1
-path=package.json
-```
+[](render:diff?ref=HEAD~1&path=package.json)
 
 *Perfect for code review presentations!*
 
@@ -291,22 +276,13 @@ More content...
 
 # 📊 Render Directive Syntax
 
-````markdown
-```render:file
-path=src/main.ts
-lines=1-20
-format=typescript
-```
+```markdown
+[](render:file?path=src/main.ts&lines=1-20&format=typescript)
 
-```render:command
-command=git status
-```
+[](render:command?cmd=git%20status)
 
-```render:diff
-ref=HEAD~1
-path=package.json
+[](render:diff?ref=HEAD~1&path=package.json)
 ```
-````
 
 ---
 
