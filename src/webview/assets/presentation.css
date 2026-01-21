@@ -619,6 +619,126 @@ html, body {
   background-color: rgba(244, 67, 54, 0.1);
 }
 
+/* Loading state for render blocks */
+.render-block-loading {
+  border-color: var(--running-color);
+  position: relative;
+  min-height: 80px;
+}
+
+.render-block-loading .render-block-header {
+  background-color: rgba(255, 152, 0, 0.1);
+}
+
+.render-block-loading .render-block-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  color: var(--secondary-color);
+}
+
+.render-block-loading .loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 152, 0, 0.2);
+  border-top-color: var(--running-color);
+  border-radius: 50%;
+  animation: spinner 0.8s linear infinite;
+  margin-right: 0.75rem;
+}
+
+@keyframes spinner {
+  to { transform: rotate(360deg); }
+}
+
+.render-block-loading .loading-text {
+  font-style: italic;
+}
+
+.render-block-loading .loading-elapsed {
+  font-size: 0.85em;
+  color: var(--secondary-color);
+  margin-left: 0.5rem;
+}
+
+/* Timeout warning in loading state */
+.render-block-loading.loading-slow .render-block-header {
+  background-color: rgba(255, 193, 7, 0.2);
+}
+
+.render-block-loading.loading-slow .loading-spinner {
+  border-top-color: #ffc107;
+}
+
+/* Streaming output in loading state */
+.render-block-loading .streaming-output {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+/* Timed out state */
+.render-block-timeout {
+  border-color: #ff9800;
+}
+
+.render-block-timeout .render-block-header {
+  background-color: rgba(255, 152, 0, 0.2);
+}
+
+.render-block-timeout .render-block-status::before {
+  content: '⏱️ ';
+}
+
+/* Fallback state (showing fallback content after error) */
+.render-block-fallback {
+  border-color: #ff9800;
+}
+
+.render-block-fallback .render-block-header {
+  background-color: rgba(255, 152, 0, 0.1);
+}
+
+.render-block-fallback .render-block-status {
+  color: #ff9800;
+  cursor: help;
+}
+
+/* Cached indicator (subtle) */
+.render-block-cached .render-block-header::after {
+  content: '(cached)';
+  font-size: 0.75em;
+  color: var(--secondary-color);
+  margin-left: 0.5rem;
+  font-style: italic;
+}
+
+/* Streaming output styles */
+.streaming-output {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+  color: var(--fg-color);
+}
+
+.streaming-output .streaming-error {
+  color: var(--error-color);
+}
+
 /* Streaming indicator */
 .render-block-streaming .render-block-status::after {
   content: '⏳';
@@ -779,6 +899,18 @@ html, body {
   opacity: 1 !important;
   visibility: visible !important;
   transition: opacity 0.4s ease, transform 0.4s ease, visibility 0s;
+}
+
+/* Nested fragments: ensure children stay hidden even when parent is visible */
+.fragment.visible .fragment {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Nested fragments: allow visible children inside visible parents */
+.fragment.visible .fragment.visible {
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 /* Fade animation (default) */

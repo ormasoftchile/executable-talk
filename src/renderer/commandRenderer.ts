@@ -17,12 +17,96 @@ export interface CommandRenderResult {
   exitCode?: number;
   error?: string;
   timedOut?: boolean;
+  fromCache?: boolean;
 }
 
 /**
  * Callback for streaming output
  */
 export type StreamCallback = (chunk: string, isError: boolean) => void;
+
+/**
+ * Cache entry for command results
+ */
+interface CacheEntry {
+  result: CommandRenderResult;
+  timestamp: number;
+  cwd: string;
+}
+
+/**
+ * Command result cache
+ * Key: command string, Value: cached result with metadata
+ */
+const commandCache = new Map<string, CacheEntry>();
+
+/**
+ * Cache TTL in milliseconds (5 minutes by default)
+ */
+const CACHE_TTL = 5 * 60 * 1000;
+
+/**
+ * Generate cache key from command and working directory
+ */
+function getCacheKey(cmd: string, cwd: string): string {
+  return `${cwd}:${cmd}`;
+}
+
+/**
+ * Get cached result if valid
+ */
+function getCachedResult(cmd: string, cwd: string): CommandRenderResult | undefined {
+  const key = getCacheKey(cmd, cwd);
+  const entry = commandCache.get(key);
+  
+  if (!entry) {
+    return undefined;
+  }
+  
+  // Check if cache is still valid
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    commandCache.delete(key);
+    return undefined;
+  }
+  
+  return { ...entry.result, fromCache: true };
+}
+
+/**
+ * Store result in cache
+ */
+function cacheResult(cmd: string, cwd: string, result: CommandRenderResult): void {
+  const key = getCacheKey(cmd, cwd);
+  commandCache.set(key, {
+    result,
+    timestamp: Date.now(),
+    cwd,
+  });
+}
+
+/**
+ * Clear command cache (useful for refresh actions)
+ */
+export function clearCommandCache(): void {
+  commandCache.clear();
+}
+
+/**
+ * Invalidate a specific command in cache
+ */
+export function invalidateCommand(cmd: string, cwd?: string): void {
+  if (cwd) {
+    const key = getCacheKey(cmd, cwd);
+    commandCache.delete(key);
+  } else {
+    // Delete all entries matching this command
+    for (const [key] of commandCache) {
+      if (key.endsWith(`:${cmd}`)) {
+        commandCache.delete(key);
+      }
+    }
+  }
+}
 
 /**
  * Execute a command and return the output
@@ -49,6 +133,14 @@ export async function renderCommand(
       };
     }
 
+    // Check cache first (only if caching is enabled and not streaming)
+    if (params.cached !== false && !onStream) {
+      const cached = getCachedResult(params.cmd, cwd);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const timeout = params.timeout || 30000;
     const shell = params.shell || true;
 
@@ -58,6 +150,11 @@ export async function renderCommand(
       timeout,
       onStream,
     });
+
+    // Cache successful results (only if caching is enabled)
+    if (params.cached !== false && result.success) {
+      cacheResult(params.cmd, cwd, result);
+    }
 
     return result;
   } catch (error) {

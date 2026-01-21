@@ -4,7 +4,7 @@
 
 import { RenderDirective, FileRenderDirective, CommandRenderDirective, DiffRenderDirective } from './renderDirectiveParser';
 import { renderFile } from './fileRenderer';
-import { renderCommand } from './commandRenderer';
+import { renderCommand, CommandRenderResult } from './commandRenderer';
 import { renderDiff, parseDiff } from './diffRenderer';
 
 /**
@@ -19,6 +19,60 @@ export interface RenderedBlock {
     language?: string;
     lineRange?: { start: number; end: number };
   };
+}
+
+/**
+ * Loading placeholder HTML for async content
+ */
+export interface LoadingPlaceholder {
+  id: string;
+  type: 'file' | 'command' | 'diff';
+  html: string;
+}
+
+/**
+ * Generate a loading placeholder for a directive
+ */
+export function createLoadingPlaceholder(directive: RenderDirective): LoadingPlaceholder {
+  const id = directive.id;
+  let source: string;
+  let icon: string;
+  
+  switch (directive.type) {
+    case 'file':
+      source = directive.params.path;
+      icon = '📄';
+      break;
+    case 'command':
+      source = directive.params.cmd;
+      icon = '⚡';
+      break;
+    case 'diff':
+      source = directive.params.path || `${directive.params.left} ↔ ${directive.params.right}`;
+      icon = '📊';
+      break;
+  }
+  
+  const timeout = directive.type === 'command' ? (directive.params.timeout || 30000) : 10000;
+  
+  const html = `
+    <div class="render-block render-block-loading" data-render-id="${id}" data-type="${directive.type}" data-timeout="${timeout}">
+      <div class="render-block-header">
+        <span class="render-block-source">${icon} ${escapeHtml(source)}</span>
+        <div class="render-block-actions">
+          <button class="render-action-cancel" title="Cancel">✕</button>
+        </div>
+      </div>
+      <div class="render-block-content">
+        <div class="loading-spinner"></div>
+        <span class="loading-text">Loading...</span>
+        <span class="loading-elapsed"></span>
+      </div>
+      <div class="streaming-output" style="display: none;"></div>
+    </div>
+  `;
+  
+  return { id, type: directive.type, html };
 }
 
 /**
@@ -73,17 +127,28 @@ async function resolveFileDirective(directive: FileRenderDirective): Promise<Ren
  * Resolve command directive
  */
 async function resolveCommandDirective(directive: CommandRenderDirective): Promise<RenderedBlock> {
-  const result = await renderCommand(directive.params);
+  const params = directive.params;
+  let retryCount = 0;
+  const maxRetries = params.retries || 0;
+  
+  // Attempt execution with retries
+  let result = await renderCommand(params);
+  
+  while (!result.success && params.onError === 'retry' && retryCount < maxRetries) {
+    retryCount++;
+    result = await renderCommand(params);
+  }
   
   if (!result.success) {
-    return createErrorBlock(directive.id, result.error || 'Failed to execute command');
+    return handleCommandError(directive, result);
   }
   
   const html = formatAsCommandBlock(
     result.output || '',
-    directive.params.cmd,
+    params.cmd,
     result.exitCode ?? 0,
-    directive.params.format || 'code'
+    params.format || 'code',
+    result.timedOut
   );
   
   return {
@@ -91,9 +156,80 @@ async function resolveCommandDirective(directive: CommandRenderDirective): Promi
     type: 'command',
     html,
     metadata: {
-      source: directive.params.cmd,
+      source: params.cmd,
     },
   };
+}
+
+/**
+ * Handle command execution error based on directive params
+ */
+function handleCommandError(directive: CommandRenderDirective, result: CommandRenderResult): RenderedBlock {
+  const params = directive.params;
+  const errorMessage = result.error || 'Command execution failed';
+  
+  switch (params.onError) {
+    case 'hide':
+      // Return empty/hidden block
+      return {
+        id: directive.id,
+        type: 'command',
+        html: `<div class="render-block-hidden" data-render-id="${directive.id}" style="display: none;"></div>`,
+        metadata: { source: params.cmd },
+      };
+    
+    case 'fallback':
+      // Show fallback content if provided
+      if (params.fallback) {
+        return {
+          id: directive.id,
+          type: 'command',
+          html: formatAsFallbackBlock(params.fallback, params.cmd, errorMessage),
+          metadata: { source: params.cmd },
+        };
+      }
+      // Fall through to show error if no fallback
+      break;
+    
+    case 'retry':
+      // Retries exhausted, show error with partial output if available
+      if (result.output) {
+        return {
+          id: directive.id,
+          type: 'command',
+          html: formatAsCommandBlock(
+            result.output + '\n\n[Retries exhausted: ' + errorMessage + ']',
+            params.cmd,
+            result.exitCode ?? 1,
+            params.format || 'code',
+            result.timedOut
+          ),
+          metadata: { source: params.cmd },
+        };
+      }
+      break;
+  }
+  
+  // Default: show error (including for 'show' and when fallthrough)
+  return createErrorBlock(directive.id, errorMessage);
+}
+
+/**
+ * Format fallback content as a block
+ */
+function formatAsFallbackBlock(fallback: string, command: string, originalError: string): string {
+  return `
+    <div class="render-block render-block-command render-block-fallback" data-type="command" data-command="${escapeHtml(command)}">
+      <div class="render-block-header">
+        <span class="render-block-source">⚡ ${escapeHtml(command)}</span>
+        <span class="render-block-status" title="${escapeHtml(originalError)}">⚠️</span>
+        <div class="render-block-actions">
+          <button class="render-action-refresh" title="Retry">↻</button>
+        </div>
+      </div>
+      <pre class="render-block-content"><code>${escapeHtml(fallback)}</code></pre>
+    </div>
+  `;
 }
 
 /**
@@ -369,15 +505,28 @@ function formatAsCodeBlock(
 /**
  * Format command output as a block
  */
-function formatAsCommandBlock(
+export function formatAsCommandBlock(
   output: string,
   command: string,
   exitCode: number,
-  format: 'code' | 'json' | 'raw' = 'code'
+  format: 'code' | 'json' | 'raw' = 'code',
+  timedOut: boolean = false
 ): string {
   const escapedOutput = escapeHtml(output);
-  const statusIcon = exitCode === 0 ? '✓' : '✗';
-  const statusClass = exitCode === 0 ? 'success' : 'error';
+  let statusIcon: string;
+  let statusClass: string;
+  
+  if (timedOut) {
+    statusIcon = '⏱️';
+    statusClass = 'timeout';
+  } else if (exitCode === 0) {
+    statusIcon = '✓';
+    statusClass = 'success';
+  } else {
+    statusIcon = '✗';
+    statusClass = 'error';
+  }
+  
   const header = `⚡ ${command}`;
   
   if (format === 'raw') {
@@ -387,7 +536,7 @@ function formatAsCommandBlock(
   const language = format === 'json' ? 'json' : 'plaintext';
   
   return `
-    <div class="render-block render-block-command render-block-${statusClass}" data-type="command" data-exit-code="${exitCode}">
+    <div class="render-block render-block-command render-block-${statusClass}" data-type="command" data-exit-code="${exitCode}" data-command="${escapeHtml(command)}">
       <div class="render-block-header">
         <span class="render-block-source">${escapeHtml(header)}</span>
         <span class="render-block-status">${statusIcon}</span>

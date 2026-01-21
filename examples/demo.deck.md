@@ -8,7 +8,7 @@ options:
     - terminal
     - zenMode
   zenMode: false
-  theme: light
+  theme: dark
   fontSize: large
 ---
 
@@ -126,6 +126,17 @@ Use `<!-- .fragment -->` after any element.
 
 ---
 
+# Nested Fragment Lists
+
+Fragments work in nested lists too:
+
+- Parent item <!-- .fragment -->
+  - Nested item 1 <!-- .fragment -->
+  - Nested item 2 <!-- .fragment -->
+- Another parent <!-- .fragment -->
+
+---
+
 # Animation Types
 
 Different animation styles:
@@ -134,6 +145,24 @@ Different animation styles:
 - Slide up from below <!-- .fragment slide-up -->
 - Zoom in <!-- .fragment zoom -->
 - Already visible, gets highlighted <!-- .fragment highlight -->
+
+---
+
+# Command Rendering Options
+
+Commands support timeout, fallback, and streaming:
+
+**With 5 second timeout:**
+
+[](render:command?cmd=echo%20"Quick%20command"&timeout=5000)
+
+**With fallback on error:**
+
+[](render:command?cmd=this-command-does-not-exist&onError=fallback&fallback=Command%20not%20available)
+
+**Cached result (fast on repeat visits):**
+
+[](render:command?cmd=date&cached=true)
 
 ---
 

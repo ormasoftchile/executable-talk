@@ -167,6 +167,20 @@ export interface TrustStatusChangedMessage {
 }
 
 /**
+ * Render block update (for async content loading)
+ */
+export interface RenderBlockUpdateMessage {
+  type: 'renderBlockUpdate';
+  payload: {
+    blockId: string;
+    html: string;
+    status: 'loading' | 'success' | 'error' | 'streaming';
+    streamChunk?: string;
+    isError?: boolean;
+  };
+}
+
+/**
  * Union of all Host → Webview messages
  */
 export type HostToWebviewMessage =
@@ -174,7 +188,8 @@ export type HostToWebviewMessage =
   | ActionStatusChangedMessage
   | DeckLoadedMessage
   | ErrorMessage
-  | TrustStatusChangedMessage;
+  | TrustStatusChangedMessage
+  | RenderBlockUpdateMessage;
 
 // ============================================================================
 // Payload types for convenience
@@ -185,6 +200,7 @@ export type ActionStatusChangedPayload = ActionStatusChangedMessage['payload'];
 export type DeckLoadedPayload = DeckLoadedMessage['payload'];
 export type ErrorPayload = ErrorMessage['payload'];
 export type TrustStatusChangedPayload = TrustStatusChangedMessage['payload'];
+export type RenderBlockUpdatePayload = RenderBlockUpdateMessage['payload'];
 
 // ============================================================================
 // Error Codes

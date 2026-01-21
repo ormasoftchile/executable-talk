@@ -10,6 +10,7 @@ import {
   DeckLoadedPayload,
   ErrorPayload,
   TrustStatusChangedPayload,
+  RenderBlockUpdatePayload,
   NavigateMessage,
   ExecuteActionMessage,
   VscodeCommandMessage,
@@ -145,6 +146,13 @@ export class WebviewProvider implements vscode.Disposable {
         error,
       },
     });
+  }
+
+  /**
+   * Send render block update message to webview
+   */
+  sendRenderBlockUpdate(payload: RenderBlockUpdatePayload): void {
+    this.postMessage({ type: 'renderBlockUpdate', payload });
   }
 
   /**

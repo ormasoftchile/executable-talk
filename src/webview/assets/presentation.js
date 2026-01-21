@@ -211,6 +211,10 @@
         case 'trustStatusChanged':
           handleTrustStatusChanged(message);
           break;
+          
+        case 'renderBlockUpdate':
+          handleRenderBlockUpdate(message);
+          break;
       }
     });
   }
@@ -337,6 +341,9 @@
     // Reset fragment state
     updateFragmentState();
 
+    // Start loading timers for any async content
+    startLoadingTimers();
+
     // Update indicator
     updateSlideIndicator();
 
@@ -442,6 +449,109 @@
     const payload = message.payload || message;
     // Could update UI to show trust status
     console.log('Trust status changed:', payload.isTrusted);
+  }
+
+  /**
+   * Handle render block updates (for async content loading)
+   */
+  function handleRenderBlockUpdate(message) {
+    const payload = message.payload || message;
+    const blockId = payload.blockId;
+    const status = payload.status;
+    
+    // Find the render block by ID
+    const block = slideContent.querySelector(`[data-render-id="${blockId}"]`);
+    if (!block) {
+      console.warn('Render block not found:', blockId);
+      return;
+    }
+    
+    switch (status) {
+      case 'loading':
+        // Already in loading state, possibly update elapsed time
+        updateLoadingElapsed(block);
+        break;
+        
+      case 'streaming':
+        // Append streaming chunk to output
+        if (payload.streamChunk) {
+          appendStreamingOutput(block, payload.streamChunk, payload.isError);
+        }
+        break;
+        
+      case 'success':
+      case 'error':
+        // Replace loading block with final content
+        if (payload.html) {
+          const temp = document.createElement('div');
+          temp.innerHTML = payload.html;
+          const newBlock = temp.firstElementChild;
+          if (newBlock) {
+            newBlock.setAttribute('data-render-id', blockId);
+            block.replaceWith(newBlock);
+          }
+        }
+        break;
+    }
+  }
+
+  /**
+   * Update elapsed time on loading block
+   */
+  function updateLoadingElapsed(block) {
+    const startTime = block.dataset.startTime;
+    if (!startTime) {
+      block.dataset.startTime = Date.now();
+      return;
+    }
+    
+    const elapsed = Math.floor((Date.now() - parseInt(startTime)) / 1000);
+    const elapsedEl = block.querySelector('.loading-elapsed');
+    if (elapsedEl) {
+      elapsedEl.textContent = `(${elapsed}s)`;
+    }
+    
+    // Add slow warning class after 5 seconds
+    const timeout = parseInt(block.dataset.timeout) || 30000;
+    if (elapsed > 5 && elapsed * 1000 < timeout * 0.8) {
+      block.classList.add('loading-slow');
+    }
+  }
+
+  /**
+   * Append streaming output to loading block
+   */
+  function appendStreamingOutput(block, chunk, isError) {
+    const streamingOutput = block.querySelector('.streaming-output');
+    if (streamingOutput) {
+      streamingOutput.style.display = 'block';
+      const span = document.createElement('span');
+      span.textContent = chunk;
+      if (isError) {
+        span.classList.add('streaming-error');
+      }
+      streamingOutput.appendChild(span);
+      // Auto-scroll to bottom
+      streamingOutput.scrollTop = streamingOutput.scrollHeight;
+    }
+  }
+
+  /**
+   * Start loading timers for all loading blocks in current slide
+   */
+  function startLoadingTimers() {
+    const loadingBlocks = slideContent.querySelectorAll('.render-block-loading');
+    loadingBlocks.forEach(function(block) {
+      block.dataset.startTime = Date.now();
+      // Update elapsed every second
+      const timerId = setInterval(function() {
+        if (!block.isConnected) {
+          clearInterval(timerId);
+          return;
+        }
+        updateLoadingElapsed(block);
+      }, 1000);
+    });
   }
 
   /**
