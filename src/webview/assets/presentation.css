@@ -99,6 +99,14 @@ body.theme-light #slide-content pre {
   color: #1e1e1e;
 }
 
+/* Remove inner borders from render blocks - they already have outer border */
+body.theme-light .render-block pre,
+body.theme-light .render-block code,
+body.theme-light #slide-content .render-block pre,
+body.theme-light #slide-content .render-block code {
+  border: none !important;
+}
+
 body.theme-light #slide-content pre code {
   border: none;
   padding: 0;
