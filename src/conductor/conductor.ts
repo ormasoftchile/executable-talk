@@ -78,8 +78,11 @@ export class Conductor implements vscode.Disposable {
       }
     }
 
-    // Enter Zen Mode
-    await enterZenMode();
+    // Enter Zen Mode if enabled (default: true)
+    const zenModeEnabled = deck.metadata?.options?.zenMode !== false;
+    if (zenModeEnabled) {
+      await enterZenMode();
+    }
 
     // Create webview callbacks
     const callbacks: WebviewCallbacks = {

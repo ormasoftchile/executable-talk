@@ -7,7 +7,7 @@ options:
     - panel
     - terminal
     - zenMode
-  zenMode: true
+  zenMode: false
   theme: light
   fontSize: large
 ---
