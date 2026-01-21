@@ -13,7 +13,7 @@ import { PresenterViewProvider } from '../webview/presenterViewProvider';
 import { getActionRegistry } from '../actions/registry';
 import { isTrusted, onTrustChanged } from '../utils/workspaceTrust';
 import { enterZenMode, exitZenMode, resetZenModeState } from '../utils/zenMode';
-import { parseRenderDirectives, resolveDirective } from '../renderer';
+import { parseRenderDirectives, resolveDirective, createLoadingPlaceholder, formatAsCommandBlock, renderCommand, StreamCallback } from '../renderer';
 
 /**
  * Actions that require workspace trust
@@ -123,7 +123,7 @@ export class Conductor implements vscode.Disposable {
     const slide = this.deck.slides[targetIndex];
 
     // Resolve render directives in slide content
-    const resolvedHtml = await this.resolveSlideRenderDirectives(slide);
+    const resolvedHtml = this.resolveSlideRenderDirectives(slide);
 
     // Send slide changed to webview
     this.webviewProvider.sendSlideChanged({
@@ -190,7 +190,7 @@ export class Conductor implements vscode.Disposable {
         const slide = this.deck.slides[snapshot.slideIndex];
         
         // Resolve render directives
-        const resolvedHtml = await this.resolveSlideRenderDirectives(slide);
+        const resolvedHtml = this.resolveSlideRenderDirectives(slide);
         
         this.webviewProvider.sendSlideChanged({
           slideIndex: snapshot.slideIndex,
@@ -554,8 +554,9 @@ export class Conductor implements vscode.Disposable {
 
   /**
    * Resolve render directives in slide content and return updated HTML
+   * Uses progressive loading: sends slide with placeholders first, then resolves async
    */
-  private async resolveSlideRenderDirectives(slide: Slide): Promise<string> {
+  private resolveSlideRenderDirectives(slide: Slide): string {
     // If no render directives, return original HTML
     if (!slide.renderDirectives || slide.renderDirectives.length === 0) {
       return slide.html;
@@ -567,19 +568,11 @@ export class Conductor implements vscode.Disposable {
       return slide.html;
     }
 
-    // Resolve each directive
-    // Resolve each directive
-    const resolvedBlocks = await Promise.all(
-      directives.map(d => resolveDirective(d))
-    );
-
-    // Replace directive placeholders in HTML with rendered content
-    // The directives appear as links in the HTML, we need to replace them
+    // First pass: replace directive links with loading placeholders
     let html = slide.html;
     
-    for (let i = 0; i < directives.length; i++) {
-      const directive = directives[i];
-      const block = resolvedBlocks[i];
+    for (const directive of directives) {
+      const placeholder = createLoadingPlaceholder(directive);
       
       // Extract the URL from the raw directive [label](url) -> url
       const urlMatch = directive.rawDirective.match(/\(([^)]+)\)/);
@@ -595,10 +588,77 @@ export class Conductor implements vscode.Disposable {
       const pattern = new RegExp(`<a\\s+href="${escapedUrl}"[^>]*>[^<]*</a>`);
       
       if (pattern.test(html)) {
-        html = html.replace(pattern, block.html);
+        html = html.replace(pattern, placeholder.html);
       }
     }
 
+    // Schedule async resolution of directives (don't await - let the slide show immediately)
+    void this.resolveDirectivesAsync(directives);
+
     return html;
+  }
+
+  /**
+   * Resolve directives asynchronously and send updates to webview
+   */
+  private async resolveDirectivesAsync(directives: import('../renderer').RenderDirective[]): Promise<void> {
+    for (const directive of directives) {
+      try {
+        // For command directives with streaming, use special handling
+        if (directive.type === 'command' && directive.params.stream) {
+          await this.resolveCommandWithStreaming(directive);
+        } else {
+          // Standard resolution
+          const block = await resolveDirective(directive);
+          this.webviewProvider.sendRenderBlockUpdate({
+            blockId: directive.id,
+            html: block.html,
+            status: 'success',
+          });
+        }
+      } catch (error) {
+        this.webviewProvider.sendRenderBlockUpdate({
+          blockId: directive.id,
+          html: `<div class="render-block render-block-error"><div class="render-block-content">${error instanceof Error ? error.message : 'Unknown error'}</div></div>`,
+          status: 'error',
+        });
+      }
+    }
+  }
+
+  /**
+   * Resolve a command directive with streaming output
+   */
+  private async resolveCommandWithStreaming(directive: import('../renderer').CommandRenderDirective): Promise<void> {
+    const params = directive.params;
+    
+    // Streaming callback to send chunks to webview
+    const onStream: StreamCallback = (chunk: string, isError: boolean) => {
+      this.webviewProvider.sendRenderBlockUpdate({
+        blockId: directive.id,
+        html: '',
+        status: 'streaming',
+        streamChunk: chunk,
+        isError,
+      });
+    };
+    
+    // Execute command with streaming
+    const result = await renderCommand(params, onStream);
+    
+    // Send final result
+    const finalHtml = formatAsCommandBlock(
+      result.output || '',
+      params.cmd,
+      result.exitCode ?? (result.success ? 0 : 1),
+      params.format || 'code',
+      result.timedOut
+    );
+    
+    this.webviewProvider.sendRenderBlockUpdate({
+      blockId: directive.id,
+      html: finalHtml,
+      status: result.success ? 'success' : 'error',
+    });
   }
 }
