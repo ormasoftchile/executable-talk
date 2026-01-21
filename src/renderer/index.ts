@@ -21,7 +21,10 @@ export {
 
 export {
   renderCommand,
+  clearCommandCache,
+  invalidateCommand,
   CommandRenderResult,
+  StreamCallback,
 } from './commandRenderer';
 
 export {
@@ -34,5 +37,8 @@ export {
 
 export {
   resolveDirective,
+  createLoadingPlaceholder,
+  formatAsCommandBlock,
   RenderedBlock,
+  LoadingPlaceholder,
 } from './contentRenderer';

@@ -42,6 +42,14 @@ export interface CommandRenderParams {
   cwd?: string;
   shell?: string;
   cached?: boolean;
+  /** Behavior on error: 'show' displays error, 'hide' hides block, 'fallback' shows fallback content */
+  onError?: 'show' | 'hide' | 'fallback' | 'retry';
+  /** Fallback content to display on error (when onError='fallback') */
+  fallback?: string;
+  /** Maximum number of retry attempts (when onError='retry') */
+  retries?: number;
+  /** Show streaming output while command runs */
+  stream?: boolean;
 }
 
 /**
@@ -212,6 +220,24 @@ function createCommandDirective(
   
   if (params.shell) {
     cmdParams.shell = params.shell;
+  }
+
+  // Error handling options
+  if (params.onError) {
+    cmdParams.onError = params.onError as CommandRenderParams['onError'];
+  }
+  
+  if (params.fallback) {
+    cmdParams.fallback = decodeURIComponent(params.fallback);
+  }
+  
+  if (params.retries) {
+    cmdParams.retries = parseInt(params.retries, 10);
+  }
+  
+  // Streaming option
+  if (params.stream === 'true') {
+    cmdParams.stream = true;
   }
   
   return { ...base, type: 'command', params: cmdParams };
