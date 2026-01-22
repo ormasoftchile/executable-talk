@@ -77,6 +77,8 @@ Start a debug session:
 |-----|--------|
 | `→` or `Space` | Next fragment or next slide |
 | `←` or `Backspace` | Previous fragment or previous slide |
+| `Shift+→` | Skip fragments, go to next slide |
+| `Shift+←` | Skip fragments, go to previous slide |
 | `Home` | First slide |
 | `End` | Last slide |
 | `Cmd+Z` / `Ctrl+Z` | Undo IDE changes |
