@@ -265,18 +265,22 @@ html, body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-#slide-content img[alt]:not([alt=""]) {
-  /* Images with alt text get a subtle border */
-}
-
-/* Inline images (in paragraphs) */
-#slide-content p > img {
+/* Inline images - only when image is NOT the sole content of a paragraph */
+#slide-content p > img:not(:only-child) {
   display: inline-block;
   vertical-align: middle;
   margin: 0 0.5rem;
   max-height: 2em;
   box-shadow: none;
   border-radius: 4px;
+}
+
+/* Standalone images in paragraphs (image is the only child) */
+#slide-content p > img:only-child {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  margin: 1rem auto;
 }
 
 /* Action Links */
