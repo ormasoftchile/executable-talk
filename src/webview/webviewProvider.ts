@@ -67,6 +67,8 @@ export class WebviewProvider implements vscode.Disposable {
         localResourceRoots: [
           vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'assets'),
           vscode.Uri.joinPath(this.extensionUri, 'out', 'webview', 'assets'),
+          // Include workspace folders for loading local images
+          ...(vscode.workspace.workspaceFolders?.map(f => f.uri) || []),
         ],
       }
     );
@@ -110,14 +112,24 @@ export class WebviewProvider implements vscode.Disposable {
    * Send slide changed message to webview
    */
   sendSlideChanged(payload: SlideChangedPayload): void {
-    this.postMessage({ type: 'slideChanged', payload });
+    // Transform image URLs in the HTML to webview URIs
+    const transformedPayload = {
+      ...payload,
+      slideHtml: this.transformImageUrls(payload.slideHtml),
+    };
+    this.postMessage({ type: 'slideChanged', payload: transformedPayload });
   }
 
   /**
    * Send deck loaded message to webview
    */
   sendDeckLoaded(payload: DeckLoadedPayload): void {
-    this.postMessage({ type: 'deckLoaded', payload });
+    // Transform image URLs in the HTML to webview URIs
+    const transformedPayload = {
+      ...payload,
+      slideHtml: this.transformImageUrls(payload.slideHtml),
+    };
+    this.postMessage({ type: 'deckLoaded', payload: transformedPayload });
   }
 
   /**
@@ -152,7 +164,12 @@ export class WebviewProvider implements vscode.Disposable {
    * Send render block update message to webview
    */
   sendRenderBlockUpdate(payload: RenderBlockUpdatePayload): void {
-    this.postMessage({ type: 'renderBlockUpdate', payload });
+    // Transform image URLs in the HTML to webview URIs
+    const transformedPayload = {
+      ...payload,
+      html: this.transformImageUrls(payload.html),
+    };
+    this.postMessage({ type: 'renderBlockUpdate', payload: transformedPayload });
   }
 
   /**
@@ -220,6 +237,54 @@ export class WebviewProvider implements vscode.Disposable {
 
     const dispatcher = createMessageDispatcher(handlers);
     void dispatcher(message);
+  }
+
+  /**
+   * Transform local image URLs in HTML to webview URIs
+   * Handles both relative paths and file:// URLs
+   */
+  private transformImageUrls(html: string): string {
+    if (!this.panel) {
+      return html;
+    }
+
+    const webview = this.panel.webview;
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      return html;
+    }
+
+    const workspaceRoot = workspaceFolders[0].uri;
+
+    // Transform src attributes in img tags
+    // Match: src="path" or src='path' (not starting with http, https, data, or webview URI scheme)
+    return html.replace(
+      /(<img[^>]*\ssrc=["'])(?!https?:|data:|vscode-webview:)([^"']+)(["'][^>]*>)/gi,
+      (_match, prefix: string, src: string, suffix: string) => {
+        try {
+          // Decode HTML entities in the src
+          const decodedSrc = src.replace(/&amp;/g, '&');
+          
+          // Handle file:// URLs
+          let fileUri: vscode.Uri;
+          if (decodedSrc.startsWith('file://')) {
+            fileUri = vscode.Uri.parse(decodedSrc);
+          } else {
+            // Relative path - resolve against workspace root
+            fileUri = vscode.Uri.joinPath(workspaceRoot, decodedSrc);
+          }
+          
+          // Convert to webview URI
+          const webviewUri = webview.asWebviewUri(fileUri);
+          return `${prefix}${webviewUri.toString()}${suffix}`;
+        } catch (error) {
+          // If transformation fails, return original
+          console.warn('Failed to transform image URL:', src, error);
+          return _match;
+        }
+      }
+    );
   }
 
   private updateContent(): void {
