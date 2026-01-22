@@ -254,6 +254,31 @@ html, body {
   padding: 0;
 }
 
+/* Images */
+#slide-content img {
+  max-width: 100%;
+  max-height: 60vh;
+  height: auto;
+  display: block;
+  margin: 1rem auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+#slide-content img[alt]:not([alt=""]) {
+  /* Images with alt text get a subtle border */
+}
+
+/* Inline images (in paragraphs) */
+#slide-content p > img {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 0.5rem;
+  max-height: 2em;
+  box-shadow: none;
+  border-radius: 4px;
+}
+
 /* Action Links */
 #slide-content a[href^="action:"] {
   display: inline-flex;

@@ -16,6 +16,8 @@ options:
 
 Press **→** or **Space** to navigate forward.
 
+![Extension Icon](../resources/icon.png)
+
 ---
 
 # Opening Files
