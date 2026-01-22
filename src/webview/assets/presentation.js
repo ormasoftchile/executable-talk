@@ -118,12 +118,12 @@
   }
 
   /**
-   * Set up button navigation
+   * Set up button navigation (always navigates full slides, not fragments)
    */
   function setupButtonNavigation() {
     btnFirst.addEventListener('click', navigateFirst);
-    btnPrev.addEventListener('click', navigatePrevious);
-    btnNext.addEventListener('click', navigateNext);
+    btnPrev.addEventListener('click', navigatePreviousSlide);
+    btnNext.addEventListener('click', navigateNextSlide);
     btnLast.addEventListener('click', navigateLast);
   }
 
