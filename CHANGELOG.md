@@ -5,6 +5,15 @@ All notable changes to the Executable Talk extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.28] - 2026-01-21
+
+### Added
+
+- **Skip Fragments Navigation**: Jump directly to previous/next slide without stepping through fragments
+  - Press `Shift+←` or `Shift+Backspace` to go directly to previous slide
+  - Press `Shift+→` or `Shift+Space` to go directly to next slide
+  - Regular arrow keys still navigate fragment-by-fragment
+
 ## [0.1.10] - 2026-01-20
 
 ### Added

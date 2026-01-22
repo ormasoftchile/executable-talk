@@ -66,14 +66,24 @@
         case 'ArrowDown':
         case ' ':  // Space key
         case 'PageDown':
-          navigateNext();
+          if (event.shiftKey) {
+            // Shift+Right: skip fragments, go to next slide
+            navigateNextSlide();
+          } else {
+            navigateNext();
+          }
           break;
 
         case 'ArrowLeft':
         case 'ArrowUp':
         case 'Backspace':
         case 'PageUp':
-          navigatePrevious();
+          if (event.shiftKey) {
+            // Shift+Left: skip fragments, go to previous slide
+            navigatePreviousSlide();
+          } else {
+            navigatePrevious();
+          }
           break;
 
         case 'Home':
@@ -240,6 +250,24 @@
     } else if (currentSlide > 0) {
       // No fragments shown, go to previous slide
       sendMessage({ type: 'navigate', payload: { direction: 'prev', showAllFragments: true } });
+    }
+  }
+
+  /**
+   * Navigate directly to previous slide, skipping fragment-by-fragment hiding
+   */
+  function navigatePreviousSlide() {
+    if (currentSlide > 0) {
+      sendMessage({ type: 'navigate', payload: { direction: 'prev', showAllFragments: true } });
+    }
+  }
+
+  /**
+   * Navigate directly to next slide, skipping fragment-by-fragment reveal
+   */
+  function navigateNextSlide() {
+    if (currentSlide < totalSlides - 1) {
+      sendMessage({ type: 'navigate', payload: { direction: 'next' } });
     }
   }
 
