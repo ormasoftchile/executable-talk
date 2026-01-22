@@ -244,18 +244,17 @@ export class WebviewProvider implements vscode.Disposable {
    * Handles both relative paths and file:// URLs
    */
   private transformImageUrls(html: string): string {
-    if (!this.panel) {
+    if (!this.panel || !this.currentDeck) {
       return html;
     }
 
     const webview = this.panel.webview;
-    const workspaceFolders = vscode.workspace.workspaceFolders;
     
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-      return html;
-    }
-
-    const workspaceRoot = workspaceFolders[0].uri;
+    // Get the directory of the deck file for resolving relative paths
+    const deckFilePath = this.currentDeck.filePath;
+    const deckDir = vscode.Uri.file(deckFilePath).with({ 
+      path: vscode.Uri.file(deckFilePath).path.replace(/\/[^/]+$/, '') 
+    });
 
     // Transform src attributes in img tags
     // Match: src="path" or src='path' (not starting with http, https, data, or webview URI scheme)
@@ -270,9 +269,12 @@ export class WebviewProvider implements vscode.Disposable {
           let fileUri: vscode.Uri;
           if (decodedSrc.startsWith('file://')) {
             fileUri = vscode.Uri.parse(decodedSrc);
+          } else if (decodedSrc.startsWith('/')) {
+            // Absolute path
+            fileUri = vscode.Uri.file(decodedSrc);
           } else {
-            // Relative path - resolve against workspace root
-            fileUri = vscode.Uri.joinPath(workspaceRoot, decodedSrc);
+            // Relative path - resolve against deck file's directory
+            fileUri = vscode.Uri.joinPath(deckDir, decodedSrc);
           }
           
           // Convert to webview URI
