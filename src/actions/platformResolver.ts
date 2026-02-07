@@ -130,9 +130,9 @@ export class PlatformResolver {
     // Gracefully use environment variable or empty string
     let shell: string;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const vscode = require('vscode');
-      shell = vscode.env.shell || process.env.SHELL || process.env.COMSPEC || '';
+      // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+      const vscodeModule = require('vscode') as { env: { shell?: string } };
+      shell = vscodeModule.env.shell || process.env.SHELL || process.env.COMSPEC || '';
     } catch {
       shell = process.env.SHELL || process.env.COMSPEC || '';
     }
