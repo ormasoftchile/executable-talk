@@ -9,6 +9,7 @@ import { FilePathValidator } from './filePathValidator';
 import { LineRangeValidator } from './lineRangeValidator';
 import { DebugConfigValidator } from './debugConfigValidator';
 import { CommandAvailabilityValidator } from './commandValidator';
+import { PlatformResolver, isPlatformCommandMap } from '../actions/platformResolver';
 
 /**
  * Action types that require workspace trust
@@ -86,6 +87,11 @@ export class PreflightValidator {
     }
     checksPerformed++;
 
+    // Phase 5: Cross-platform command coverage check
+    const platformIssues = this.checkPlatformCoverage(context);
+    allIssues.push(...platformIssues);
+    checksPerformed++;
+
     return this.buildReport(deck.filePath, startTime, allIssues, checksPerformed, deck.slides.length, actionCount, renderDirectiveCount);
   }
 
@@ -114,6 +120,55 @@ export class PreflightValidator {
             source: action.type,
             message: `Action '${action.type}' requires Workspace Trust (workspace is untrusted)`,
           });
+        }
+      }
+    }
+
+    return issues;
+  }
+
+  /**
+   * Check cross-platform command coverage for terminal.run actions
+   * with PlatformCommandMap commands.
+   */
+  private checkPlatformCoverage(context: ValidationContext): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const resolver = new PlatformResolver();
+
+    for (const slide of context.deck.slides) {
+      // Check interactive elements
+      for (const el of slide.interactiveElements) {
+        if (el.action.type === 'terminal.run') {
+          const command = el.action.params.command;
+          if (isPlatformCommandMap(command)) {
+            const result = resolver.validate(command);
+            if (!result.isValid && result.warning) {
+              issues.push({
+                severity: 'warning',
+                slideIndex: slide.index,
+                source: 'terminal.run',
+                message: `Slide ${slide.index + 1}: ${result.warning}`,
+              });
+            }
+          }
+        }
+      }
+
+      // Check onEnter actions
+      for (const action of slide.onEnterActions) {
+        if (action.type === 'terminal.run') {
+          const command = action.params.command;
+          if (isPlatformCommandMap(command)) {
+            const result = resolver.validate(command);
+            if (!result.isValid && result.warning) {
+              issues.push({
+                severity: 'warning',
+                slideIndex: slide.index,
+                source: 'terminal.run',
+                message: `Slide ${slide.index + 1}: ${result.warning}`,
+              });
+            }
+          }
         }
       }
     }

@@ -41,6 +41,12 @@ export class ActionHoverProvider {
     position: { line: number; character: number },
     _token: unknown,
   ): HoverResult | null {
+    // Check if cursor is inside frontmatter scenes block
+    const scenesHover = this.provideScenesHover(document, position);
+    if (scenesHover) {
+      return scenesHover;
+    }
+
     // Find action blocks
     const blocks = findActionBlocks(document);
 
@@ -194,6 +200,116 @@ export class ActionHoverProvider {
         return block;
       }
     }
+    return null;
+  }
+
+  /**
+   * Find the frontmatter region (between first and second ---).
+   */
+  private findFrontmatter(document: { lineCount: number; lineAt(line: number): { text: string } }): [number, number] | null {
+    if (document.lineCount < 3) {
+      return null;
+    }
+    if (document.lineAt(0).text.trim() !== '---') {
+      return null;
+    }
+    for (let i = 1; i < document.lineCount; i++) {
+      if (document.lineAt(i).text.trim() === '---') {
+        return [0, i];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Provide hover for scenes frontmatter properties (name, slide) and the scenes: key itself.
+   */
+  private provideScenesHover(
+    document: { lineCount: number; lineAt(line: number): { text: string } },
+    position: { line: number; character: number },
+  ): HoverResult | null {
+    const fm = this.findFrontmatter(document);
+    if (!fm) {
+      return null;
+    }
+    const [fmStart, fmEnd] = fm;
+    if (position.line <= fmStart || position.line >= fmEnd) {
+      return null;
+    }
+
+    const lineText = document.lineAt(position.line).text;
+
+    // Hover on the "scenes:" key itself
+    const scenesKeyMatch = lineText.match(/^(scenes):/);
+    if (scenesKeyMatch) {
+      const keyStart = 0;
+      const keyEnd = scenesKeyMatch[1].length;
+      if (position.character >= keyStart && position.character < keyEnd) {
+        return {
+          contents: [
+            '**scenes** — Pre-authored Scene Anchors\n\n' +
+            'An array of named scene checkpoints defined in the deck frontmatter. ' +
+            'Each entry creates a recovery point that appears in the scene picker when the presentation opens.\n\n' +
+            '**Format**:\n```yaml\nscenes:\n  - name: intro\n    slide: 1\n  - name: live-demo\n    slide: 8\n```\n\n' +
+            '| Property | Type | Description |\n' +
+            '|----------|------|-------------|\n' +
+            '| `name` | string | Unique scene label shown in the picker |\n' +
+            '| `slide` | number | 1-based slide number to anchor to |',
+          ],
+          range: {
+            start: { line: position.line, character: keyStart },
+            end: { line: position.line, character: keyEnd },
+          },
+        };
+      }
+    }
+
+    // Check if inside scenes block
+    let inScenesBlock = false;
+    for (let i = position.line; i > fmStart; i--) {
+      if (/^scenes:\s*$/.test(document.lineAt(i).text)) {
+        inScenesBlock = true;
+        break;
+      }
+      if (i < position.line && /^\S/.test(document.lineAt(i).text) && !/^\s*-\s/.test(document.lineAt(i).text)) {
+        break;
+      }
+    }
+
+    if (!inScenesBlock) {
+      return null;
+    }
+
+    // Hover on "name" property
+    const nameMatch = lineText.match(/^\s+-?\s*(name):/);
+    if (nameMatch) {
+      const idx = lineText.indexOf('name');
+      if (position.character >= idx && position.character < idx + 4) {
+        return {
+          contents: ['**name**: `string` *(required)*\n\nUnique name for the scene anchor. Displayed as the label in the scene picker. Duplicate names are rejected during deck parsing.'],
+          range: {
+            start: { line: position.line, character: idx },
+            end: { line: position.line, character: idx + 4 },
+          },
+        };
+      }
+    }
+
+    // Hover on "slide" property
+    const slideMatch = lineText.match(/^\s+-?\s*(slide):/);
+    if (slideMatch) {
+      const idx = lineText.indexOf('slide');
+      if (position.character >= idx && position.character < idx + 5) {
+        return {
+          contents: ['**slide**: `number` *(required)*\n\nThe 1-based slide number this scene anchors to. Must be within the range [1, total slides]. On restore, the presentation navigates to this slide and executes its onEnter actions.'],
+          range: {
+            start: { line: position.line, character: idx },
+            end: { line: position.line, character: idx + 5 },
+          },
+        };
+      }
+    }
+
     return null;
   }
 }
