@@ -62,3 +62,36 @@ export class TrustError extends Error {
     this.actionType = actionType;
   }
 }
+
+// ============================================================================
+// Structured Error Detail Types (per error-feedback contract, T027)
+// ============================================================================
+
+/**
+ * Outcome of a single step within a sequence
+ */
+export interface StepResult {
+  /** Step's action type */
+  type: ActionType;
+  /** Step's target (path, command, etc.) */
+  target?: string;
+  /** Outcome */
+  status: 'success' | 'failed' | 'skipped';
+  /** Error message if status is 'failed' */
+  error?: string;
+}
+
+/**
+ * Structured detail for a sequence execution failure.
+ * Sent to the webview so the toast can display per-step breakdown.
+ */
+export interface SequenceErrorDetail {
+  /** Total number of steps in the sequence */
+  totalSteps: number;
+  /** Zero-based index of the step that failed */
+  failedStepIndex: number;
+  /** Action type of the failed step */
+  failedStepType: ActionType;
+  /** Ordered results for each step */
+  stepResults: StepResult[];
+}

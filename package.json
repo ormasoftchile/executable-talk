@@ -64,6 +64,10 @@
       {
         "command": "executableTalk.openPresenterView",
         "title": "Executable Talk: Open Presenter View"
+      },
+      {
+        "command": "executableTalk.validateDeck",
+        "title": "Executable Talk: Validate Deck"
       }
     ],
     "languages": [
@@ -99,6 +103,7 @@
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",
+    "@types/js-yaml": "^4.0.9",
     "@types/markdown-it": "^14.1.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.10.0",
@@ -117,6 +122,7 @@
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.1",
     "markdown-it": "^14.0.0"
   }
 }

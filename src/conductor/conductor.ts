@@ -13,7 +13,10 @@ import { PresenterViewProvider } from '../webview/presenterViewProvider';
 import { getActionRegistry } from '../actions/registry';
 import { isTrusted, onTrustChanged } from '../utils/workspaceTrust';
 import { enterZenMode, exitZenMode, resetZenModeState } from '../utils/zenMode';
-import { parseRenderDirectives, resolveDirective, createLoadingPlaceholder, formatAsCommandBlock, renderCommand, StreamCallback } from '../renderer';
+import { parseRenderDirectives, resolveDirective, createLoadingPlaceholder, formatAsCommandBlock, renderCommand, StreamCallback, renderBlockElements } from '../renderer';
+import { parseDeck } from '../parser';
+import { PreflightValidator } from '../validation/preflightValidator';
+import { ValidationReport, ValidationIssue } from '../validation/types';
 
 /**
  * Actions that require workspace trust
@@ -32,6 +35,8 @@ export class Conductor implements vscode.Disposable {
   private presenterViewProvider: PresenterViewProvider;
   private disposables: vscode.Disposable[] = [];
   private outputChannel: vscode.OutputChannel;
+  private validationOutputChannel: vscode.OutputChannel;
+  private validationDiagnostics: vscode.DiagnosticCollection;
   private cancellationTokenSource: vscode.CancellationTokenSource | undefined;
 
   constructor(extensionUri: vscode.Uri) {
@@ -41,7 +46,9 @@ export class Conductor implements vscode.Disposable {
     this.presenterViewProvider = new PresenterViewProvider(extensionUri);
 
     this.outputChannel = vscode.window.createOutputChannel('Executable Talk');
-    this.disposables.push(this.outputChannel);
+    this.validationOutputChannel = vscode.window.createOutputChannel('Executable Talk Validation');
+    this.validationDiagnostics = vscode.languages.createDiagnosticCollection('Executable Talk: Validation');
+    this.disposables.push(this.outputChannel, this.validationOutputChannel, this.validationDiagnostics);
 
     // Listen for workspace trust changes
     this.disposables.push(
@@ -256,6 +263,143 @@ export class Conductor implements vscode.Disposable {
   }
 
   /**
+   * Validate deck — runs preflight checks and reports results via
+   * DiagnosticCollection, OutputChannel, and notification toast.
+   * Per T022 and contracts/preflight-validation.md.
+   */
+  async validateDeck(document: vscode.TextDocument): Promise<ValidationReport | undefined> {
+    const content = document.getText();
+    const filePath = document.uri.fsPath;
+
+    // Parse the deck first
+    const parseResult = parseDeck(content, filePath);
+    if (!parseResult.deck) {
+      void vscode.window.showWarningMessage(
+        `Cannot validate: ${parseResult.error || 'Failed to parse deck'}`
+      );
+      return undefined;
+    }
+
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+
+    // Run validation with progress
+    const report = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Validating deck...',
+        cancellable: true,
+      },
+      async (_progress, token) => {
+        const validator = new PreflightValidator();
+        return validator.validate({
+          deck: parseResult.deck!,
+          workspaceRoot,
+          isTrusted: isTrusted(),
+          cancellationToken: token,
+        });
+      }
+    );
+
+    // Map issues to diagnostics
+    this.applyDiagnostics(document.uri, report.issues);
+
+    // Write to output channel
+    this.writeValidationLog(report);
+
+    // Show summary notification
+    this.showValidationSummary(report);
+
+    return report;
+  }
+
+  /**
+   * Map ValidationIssues to VS Code diagnostics on the .deck.md file.
+   */
+  private applyDiagnostics(uri: vscode.Uri, issues: ValidationIssue[]): void {
+    const diagnostics: vscode.Diagnostic[] = issues.map((issue) => {
+      const line = (issue.line ?? 1) - 1; // Convert to 0-based
+      const range = new vscode.Range(line, 0, line, 1000);
+      const severity = issue.severity === 'error'
+        ? vscode.DiagnosticSeverity.Error
+        : issue.severity === 'warning'
+          ? vscode.DiagnosticSeverity.Warning
+          : vscode.DiagnosticSeverity.Information;
+
+      const diag = new vscode.Diagnostic(range, issue.message, severity);
+      diag.source = 'Executable Talk';
+      return diag;
+    });
+
+    this.validationDiagnostics.set(uri, diagnostics);
+  }
+
+  /**
+   * Write detailed validation log to the output channel.
+   */
+  private writeValidationLog(report: ValidationReport): void {
+    const ch = this.validationOutputChannel;
+    ch.appendLine('═══════════════════════════════════════════');
+    ch.appendLine('Executable Talk: Validate Deck');
+    ch.appendLine('═══════════════════════════════════════════');
+    ch.appendLine(`File: ${report.deckFilePath}`);
+    ch.appendLine(`Time: ${new Date(report.timestamp).toISOString()} (${report.durationMs}ms)`);
+    ch.appendLine('');
+
+    if (report.passed) {
+      ch.appendLine(`✅ ${report.checksPerformed} checks passed`);
+    } else {
+      ch.appendLine(`❌ ${report.issues.filter(i => i.severity === 'error').length} error(s) found`);
+    }
+
+    const warnings = report.issues.filter(i => i.severity === 'warning').length;
+    if (warnings > 0) {
+      ch.appendLine(`⚠️  ${warnings} warning(s)`);
+    }
+
+    ch.appendLine(`   • ${report.slideCount} slides, ${report.actionCount} actions, ${report.renderDirectiveCount} render directives`);
+    ch.appendLine('');
+
+    for (const issue of report.issues) {
+      const icon = issue.severity === 'error' ? '❌' : issue.severity === 'warning' ? '⚠️' : 'ℹ️';
+      ch.appendLine(`${icon} [Slide ${issue.slideIndex + 1}] ${issue.source}: ${issue.message}`);
+    }
+
+    ch.appendLine('');
+  }
+
+  /**
+   * Show a summary notification with "Show Problems" action.
+   */
+  private showValidationSummary(report: ValidationReport): void {
+    const errors = report.issues.filter(i => i.severity === 'error').length;
+    const warnings = report.issues.filter(i => i.severity === 'warning').length;
+
+    if (report.passed && warnings === 0) {
+      void vscode.window.showInformationMessage(
+        `✅ Deck validated: ${report.checksPerformed} checks passed`
+      );
+    } else if (report.passed) {
+      void vscode.window.showWarningMessage(
+        `⚠️ Deck validated with ${warnings} warning(s)`,
+        'Show Problems'
+      ).then(action => {
+        if (action === 'Show Problems') {
+          void vscode.commands.executeCommand('workbench.actions.view.problems');
+        }
+      });
+    } else {
+      void vscode.window.showErrorMessage(
+        `❌ Deck validation failed: ${errors} error(s), ${warnings} warning(s)`,
+        'Show Problems'
+      ).then(action => {
+        if (action === 'Show Problems') {
+          void vscode.commands.executeCommand('workbench.actions.view.problems');
+        }
+      });
+    }
+  }
+
+  /**
    * Reset presentation to initial state
    */
   async reset(): Promise<void> {
@@ -364,12 +508,13 @@ export class Conductor implements vscode.Disposable {
   private handleReady(): void {
     if (this.deck) {
       const firstSlide = this.deck.slides[0];
+      const firstSlideBlockHtml = firstSlide ? renderBlockElements(firstSlide) : '';
       this.webviewProvider.sendDeckLoaded({
         title: this.deck.title,
         author: this.deck.author,
         totalSlides: this.deck.slides.length,
         currentSlideIndex: 0,
-        slideHtml: firstSlide?.html ?? '',
+        slideHtml: (firstSlide?.html ?? '') + firstSlideBlockHtml,
         speakerNotes: firstSlide?.speakerNotes,
         interactiveElements: firstSlide?.interactiveElements.map(el => ({
           id: el.id,
@@ -472,10 +617,16 @@ export class Conductor implements vscode.Disposable {
           this.snapshotFactory.trackOpenedEditor(action.params.path);
         }
       } else {
+        // Forward rich error detail for toast display (per error-feedback contract, T030)
         this.webviewProvider.sendActionStatusChanged(
           statusId,
           'failed',
-          result.error
+          result.error,
+          {
+            actionType: result.actionType ?? action.type,
+            actionTarget: result.actionTarget,
+            sequenceDetail: result.sequenceDetail,
+          }
         );
       }
     } catch (error) {
@@ -557,15 +708,17 @@ export class Conductor implements vscode.Disposable {
    * Uses progressive loading: sends slide with placeholders first, then resolves async
    */
   private resolveSlideRenderDirectives(slide: Slide): string {
-    // If no render directives, return original HTML
+    const blockHtml = renderBlockElements(slide);
+
+    // If no render directives, return original HTML + block elements
     if (!slide.renderDirectives || slide.renderDirectives.length === 0) {
-      return slide.html;
+      return slide.html + blockHtml;
     }
 
     // Parse the full directives from raw content
     const directives = parseRenderDirectives(slide.content, slide.index);
     if (directives.length === 0) {
-      return slide.html;
+      return slide.html + blockHtml;
     }
 
     // First pass: replace directive links with loading placeholders
@@ -595,7 +748,7 @@ export class Conductor implements vscode.Disposable {
     // Schedule async resolution of directives (don't await - let the slide show immediately)
     void this.resolveDirectivesAsync(directives);
 
-    return html;
+    return html + blockHtml;
   }
 
   /**

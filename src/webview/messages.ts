@@ -3,7 +3,8 @@
  * Per contracts/message-protocol.md
  */
 
-import { ActionStatus } from '../models/action';
+import { ActionStatus, ActionType } from '../models/action';
+import { SequenceErrorDetail } from '../actions/errors';
 
 // ============================================================================
 // Webview → Extension Host Messages
@@ -120,6 +121,12 @@ export interface ActionStatusChangedMessage {
     actionId: string;
     status: ActionStatus;
     error?: string;
+    /** NEW: Action type for rich error display (per error-feedback contract, T026) */
+    actionType?: ActionType;
+    /** NEW: Primary target of the action (file path, command, config name) */
+    actionTarget?: string;
+    /** NEW: Structured sequence failure detail */
+    sequenceDetail?: SequenceErrorDetail;
   };
   messageId?: string;
 }

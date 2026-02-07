@@ -1,23 +1,14 @@
 ---
 title: Demo Presentation
 author: Test User
-options:
-  toolbar:
-    - sidebar
-    - panel
-    - terminal
-    - zenMode
-  zenMode: false
-  theme: dark
-  fontSize: large
 ---
 
 # Welcome to Executable Talk! 🎉
 
 Press **→** or **Space** to navigate forward.
 
-![Extension Icon](../resources/icon.png)
-
+---
+notes: This slide demonstrates file opening. Click the link below.
 ---
 
 # Opening Files
@@ -39,6 +30,8 @@ Highlight specific lines in a file:
 [Highlight line 20](action:editor.highlight?path=package.json&lines=20)
 
 ---
+notes: Terminal commands require Workspace Trust!
+---
 
 # Terminal Commands
 
@@ -50,24 +43,11 @@ Run a command in the terminal:
 
 ---
 
-# VS Code Commands
-
-Execute any VS Code command directly:
-
-[Open Settings (filtered to "font")](action:vscode.command?id=workbench.action.openSettings&args=%22font%22)
-
-[Search Markdown Extensions](action:vscode.command?id=workbench.extensions.search&args=%22markdown%22)
-
-[Toggle Sidebar](action:vscode.command?id=workbench.action.toggleSidebarVisibility)
-
----
-
 # Sequences
 
 Execute multiple actions in order:
 
 [Open and Highlight](action:sequence?actions=file.open%3Fpath%3Dpackage.json,editor.highlight%3Fpath%3Dpackage.json%26lines%3D1-5)
-
 
 ---
 
@@ -75,8 +55,7 @@ Execute multiple actions in order:
 
 Embed file content directly in slides:
 
-[](render:file?path=package.json&lines=2-4)
-
+[](render:file?path=package.json&lines=1-10)
 
 ---
 
@@ -86,7 +65,7 @@ Execute a command and embed its output:
 
 [](render:command?cmd=npm%20--version)
 
-[](render:command?cmd=ls%20-la)
+[](render:command?cmd=ls%20-la%20src/)
 
 ---
 
@@ -94,77 +73,169 @@ Execute a command and embed its output:
 
 View git diffs directly in your slides:
 
-[](render:diff?path=examples/demo.deck.md&before=HEAD~5)
+[](render:diff?path=src/renderer/contentRenderer.ts&before=HEAD~3)
 
 ---
 
-# Presentation Options
+# VS Code Commands
 
-Customize via frontmatter `options`:
+Execute any VS Code command:
 
-```yaml
-options:
-  toolbar: true | false | [buttons]
-  zenMode: true | false
-  showSlideNumbers: true | false
-  showProgress: true | false
-  fontSize: small | medium | large
-  theme: dark | light
+[Open Settings](action:vscode.command?id=workbench.action.openSettings)
+
+[Toggle Sidebar](action:vscode.command?id=workbench.action.toggleSidebarVisibility)
+
+[Search Extensions](action:vscode.command?id=workbench.extensions.search&args=%22markdown%22)
+
+---
+notes: |
+  NEW in v0.2.0 — YAML action blocks!
+  Instead of URL-encoded inline links, you can write human-readable YAML.
+  Both syntaxes work side by side.
+---
+
+# 🆕 YAML Action Blocks
+
+Write actions as readable YAML — no more URL encoding!
+
+**Old way (still works):**
+
+```
+[Open File](action:file.open?path=package.json)
 ```
 
-**Toolbar buttons:** `sidebar`, `panel`, `terminal`, `activityBar`, `zenMode`
+**New way — human-readable YAML:**
+
+```action
+type: file.open
+path: package.json
+label: Open package.json
+```
 
 ---
 
-# Fragment Animations
+# YAML Action Blocks — Highlighting
 
-Build bullet points one at a time:
+YAML blocks make complex actions much easier to read:
 
-- First point appears <!-- .fragment -->
-- Then the second <!-- .fragment -->
-- And finally the third! <!-- .fragment -->
+```action
+type: editor.highlight
+path: src/extension.ts
+lines: 1-15
+label: Show Extension Entry Point
+```
 
-Use `<!-- .fragment -->` after any element.
+---
+notes: |
+  This slide shows a sequence in YAML.
+  Compare how much cleaner this is than the URL-encoded version!
+---
+
+# YAML Sequences
+
+Sequences are dramatically cleaner in YAML:
+
+```action
+type: sequence
+label: Full Demo Flow
+steps:
+  - type: file.open
+    path: ../src/extension.ts
+  - type: editor.highlight
+    path: ../src/extension.ts
+    lines: 8-20
+  - type: terminal.run
+    command: echo "Hello from the sequence!"
+```
 
 ---
 
-# Nested Fragment Lists
+# YAML Terminal & VS Code Commands
 
-Fragments work in nested lists too:
+```action
+type: terminal.run
+command: echo "YAML blocks are great!"
+label: Run Echo Command
+```
 
-- Parent item <!-- .fragment -->
-  - Nested item 1 <!-- .fragment -->
-  - Nested item 2 <!-- .fragment -->
-- Another parent <!-- .fragment -->
+```action
+type: vscode.command
+id: workbench.action.toggleSidebarVisibility
+label: Toggle Sidebar
+```
+
+---
+notes: |
+  NEW — Preflight Validation!
+  Run Cmd+Shift+P → "Executable Talk: Validate Deck" to catch errors before presenting.
+  This slide has intentional errors for you to find with the validator.
+---
+
+# 🔍 Preflight Validation
+
+Run **Validate Deck** (`Cmd+Shift+P`) to catch errors before presenting!
+
+The validator checks for: <!-- .fragment -->
+
+- ✅ Missing files <!-- .fragment -->
+- ✅ Out-of-range line numbers <!-- .fragment -->
+- ✅ Missing debug configurations <!-- .fragment -->
+- ✅ Unavailable terminal commands <!-- .fragment -->
+- ✅ Trust issues in untrusted workspaces <!-- .fragment -->
 
 ---
 
-# Animation Types
+# Validation — Intentional Errors
 
-Different animation styles:
+These action blocks have problems the validator will catch:
 
-- Fade in (default) <!-- .fragment fade -->
-- Slide up from below <!-- .fragment slide-up -->
-- Zoom in <!-- .fragment zoom -->
-- Already visible, gets highlighted <!-- .fragment highlight -->
+```action
+type: file.open
+path: this/file/does/not/exist.ts
+label: Missing File (validator catches this!)
+```
+
+```action
+type: editor.highlight
+path: package.json
+lines: 9999-10000
+label: Out of Range (validator catches this!)
+```
 
 ---
+notes: |
+  NEW — Error Toasts!
+  When actions fail during a live presentation, you get non-blocking toast notifications.
+  Try clicking the intentional-error actions on the previous slide to see them!
+---
 
-# Command Rendering Options
+# 🔔 Error Notifications
 
-Commands support timeout, fallback, and streaming:
+When an action fails during presentation, you'll see a **toast notification**:
 
-**With 5 second timeout:**
+- 📄 **file.open** — shows which file couldn't be found <!-- .fragment -->
+- 🔍 **editor.highlight** — shows which lines are out of range <!-- .fragment -->
+- ▶ **terminal.run** — shows the failing command <!-- .fragment -->
+- 🔗 **sequence** — shows step-by-step breakdown (✅ ❌ ⏭) <!-- .fragment -->
 
-[](render:command?cmd=echo%20"Quick%20command"&timeout=5000)
+Toasts auto-dismiss after 8s. Hover to pause the timer. <!-- .fragment -->
 
-**With fallback on error:**
+---
+notes: |
+  NEW — Authoring Assistance!
+  Try editing this deck file to see autocomplete, hover docs, and diagnostics in action.
+  Type "type:" inside an action block to see suggestions.
+---
 
-[](render:command?cmd=this-command-does-not-exist&onError=fallback&fallback=Command%20not%20available)
+# ✍️ Authoring Assistance
 
-**Cached result (fast on repeat visits):**
+When editing `.deck.md` files, you get full IDE support:
 
-[](render:command?cmd=date&cached=true)
+- **Autocomplete** — type suggestions after `type:`, parameter suggestions per action type <!-- .fragment -->
+- **Hover Docs** — hover on `file.open` or `path` for descriptions and param tables <!-- .fragment -->
+- **Real-time Diagnostics** — red squiggles for unknown types, missing params, invalid YAML <!-- .fragment -->
+
+*Try it! Open this file and edit an action block.* <!-- .fragment -->
 
 ---
 

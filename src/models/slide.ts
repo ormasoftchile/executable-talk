@@ -41,6 +41,9 @@ export interface InteractiveElement {
   position: ContentPosition;
   /** Original markdown link text */
   rawLink: string;
+  /** Whether this element came from an inline link or a fenced block.
+   *  Defaults to 'inline' for backward compatibility. */
+  source?: 'inline' | 'block';
 }
 
 /**

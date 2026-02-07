@@ -464,6 +464,187 @@
     } else {
       hideActionOverlay();
     }
+
+    // --- Toast notification for failures (per error-feedback contract, T031) ---
+    if (status === 'failed' && payload.actionType) {
+      showErrorToast(payload);
+    }
+  }
+
+  // =========================================================================
+  // Toast Notification System (per error-feedback contract, T031)
+  // =========================================================================
+
+  /** Max simultaneous visible toasts */
+  var MAX_TOASTS = 5;
+  /** Auto-dismiss timeout for simple failures (ms) */
+  var AUTO_DISMISS_MS = 8000;
+
+  /** Icon map by action type */
+  var ACTION_ICONS = {
+    'file.open': '📄',
+    'editor.highlight': '🔍',
+    'terminal.run': '▶',
+    'debug.start': '🐛',
+    'sequence': '🔗',
+    'vscode.command': '⚙️',
+  };
+
+  /**
+   * Ensure the toast container exists in the DOM.
+   */
+  function getToastContainer() {
+    var container = document.querySelector('.toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  /**
+   * Show an error toast notification.
+   */
+  function showErrorToast(payload) {
+    var container = getToastContainer();
+    var isSequence = !!payload.sequenceDetail;
+    var isTimeout = (payload.error || '').indexOf('timed out') >= 0;
+    var persist = isSequence || isTimeout;
+
+    // Enforce max toast count
+    enforceMaxToasts(container);
+
+    var toast = document.createElement('div');
+    toast.className = 'toast toast--error toast--entering';
+    toast.innerHTML = buildToastHTML(payload, isSequence);
+
+    // Dismiss button
+    var dismissBtn = toast.querySelector('.toast__dismiss');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', function () {
+        removeToast(toast);
+      });
+    }
+
+    // Auto-dismiss timer for simple failures
+    var timerId = null;
+    if (!persist) {
+      timerId = setTimeout(function () {
+        removeToast(toast);
+      }, AUTO_DISMISS_MS);
+      toast.dataset.autoDismiss = 'true';
+    }
+
+    // Hover pauses auto-dismiss
+    toast.addEventListener('mouseenter', function () {
+      if (timerId) {
+        clearTimeout(timerId);
+        timerId = null;
+      }
+    });
+    toast.addEventListener('mouseleave', function () {
+      if (!persist && toast.isConnected) {
+        timerId = setTimeout(function () {
+          removeToast(toast);
+        }, AUTO_DISMISS_MS);
+      }
+    });
+
+    container.appendChild(toast);
+
+    // Trigger entry animation (remove entering class after animation)
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        toast.classList.remove('toast--entering');
+      });
+    });
+  }
+
+  /**
+   * Build the inner HTML for a toast notification.
+   */
+  function buildToastHTML(payload, isSequence) {
+    var icon = ACTION_ICONS[payload.actionType] || '❌';
+    var title = (payload.actionType || 'action') + ' failed';
+    var parts = [];
+
+    parts.push('<div class="toast__header">');
+    parts.push('<span class="toast__icon">' + icon + '</span>');
+    parts.push('<span class="toast__title">' + escapeHtml(title) + '</span>');
+    parts.push('<button class="toast__dismiss" aria-label="Dismiss">✕</button>');
+    parts.push('</div>');
+
+    if (payload.actionTarget) {
+      parts.push('<div class="toast__target">' + escapeHtml(payload.actionTarget) + '</div>');
+    }
+
+    if (isSequence && payload.sequenceDetail) {
+      var detail = payload.sequenceDetail;
+      parts.push('<div class="toast__message">Step ' + (detail.failedStepIndex + 1) + ' of ' + detail.totalSteps + ' failed</div>');
+      parts.push('<div class="toast__steps">');
+      for (var i = 0; i < detail.stepResults.length; i++) {
+        var step = detail.stepResults[i];
+        var stepIcon = step.status === 'success' ? '✅' : step.status === 'failed' ? '❌' : '⏭';
+        var stepClass = 'toast__step--' + step.status;
+        parts.push('<div class="' + stepClass + '">');
+        parts.push(stepIcon + ' ' + (i + 1) + '. ' + escapeHtml(step.type));
+        if (step.status === 'failed' && step.error) {
+          parts.push('<div class="toast__step-error">&nbsp;&nbsp;&nbsp;└─ ' + escapeHtml(step.error) + '</div>');
+        }
+        parts.push('</div>');
+      }
+      parts.push('</div>');
+    } else if (payload.error) {
+      parts.push('<div class="toast__message">' + escapeHtml(payload.error) + '</div>');
+    }
+
+    return parts.join('');
+  }
+
+  /**
+   * Remove a toast with exit animation.
+   */
+  function removeToast(toast) {
+    if (!toast.isConnected) return;
+    toast.classList.add('toast--exiting');
+    setTimeout(function () {
+      if (toast.isConnected) {
+        toast.remove();
+      }
+    }, 200);
+  }
+
+  /**
+   * Enforce the max toast count by evicting the oldest auto-dismissible toast.
+   */
+  function enforceMaxToasts(container) {
+    var toasts = container.querySelectorAll('.toast');
+    if (toasts.length < MAX_TOASTS) return;
+
+    // Find oldest auto-dismissible toast
+    for (var i = 0; i < toasts.length; i++) {
+      if (toasts[i].dataset.autoDismiss === 'true') {
+        removeToast(toasts[i]);
+        return;
+      }
+    }
+    // If no auto-dismissible, remove the oldest toast regardless
+    if (toasts.length >= MAX_TOASTS) {
+      removeToast(toasts[0]);
+    }
+  }
+
+  /**
+   * Escape HTML to prevent XSS in toast content.
+   */
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   function handleError(message) {

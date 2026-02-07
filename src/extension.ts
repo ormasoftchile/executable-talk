@@ -2,6 +2,9 @@ import * as vscode from 'vscode';
 import { Conductor } from './conductor';
 import { parseDeck } from './parser';
 import { registerAllExecutors } from './actions';
+import { ActionCompletionProvider } from './providers/actionCompletionProvider';
+import { ActionHoverProvider } from './providers/actionHoverProvider';
+import { ActionDiagnosticProvider } from './providers/actionDiagnosticProvider';
 
 let conductor: Conductor | undefined;
 
@@ -102,13 +105,125 @@ export function activate(context: vscode.ExtensionContext): void {
         }
     );
 
+    const validateDeckDisposable = vscode.commands.registerCommand(
+        'executableTalk.validateDeck',
+        async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || !editor.document.fileName.endsWith('.deck.md')) {
+                void vscode.window.showWarningMessage('Open a .deck.md file first to validate.');
+                return;
+            }
+            await conductor?.validateDeck(editor.document);
+        }
+    );
+
+    // Register authoring assistance providers (US4)
+    const documentSelector: vscode.DocumentSelector = { language: 'deck-markdown' };
+
+    const completionProvider = new ActionCompletionProvider();
+    const completionDisposable = vscode.languages.registerCompletionItemProvider(
+        documentSelector,
+        {
+            provideCompletionItems(document, position, token, context) {
+                const items = completionProvider.provideCompletionItems(document, position, token, context);
+                if (!items) {
+                    return undefined;
+                }
+                const vsItems = items.map((item) => {
+                    const ci = new vscode.CompletionItem(item.label, item.kind);
+                    ci.insertText = item.insertText;
+                    ci.detail = item.detail;
+                    ci.documentation = item.documentation;
+                    if (item.range) {
+                        const r = item.range;
+                        ci.range = new vscode.Range(r.startLine, r.startChar, r.endLine, r.endChar);
+                    }
+                    // Ensure items always show regardless of typed text
+                    ci.filterText = item.insertText ?? item.label;
+                    return ci;
+                });
+                // isIncomplete: re-query on every keystroke so items aren't
+                // filtered away when the typed text doesn't match any label
+                return new vscode.CompletionList(vsItems, /* isIncomplete */ true);
+            },
+        },
+        ':', '/', ' ',
+    );
+
+    const hoverProvider = new ActionHoverProvider();
+    const hoverDisposable = vscode.languages.registerHoverProvider(
+        documentSelector,
+        {
+            provideHover(document, position, token) {
+                const result = hoverProvider.provideHover(document, position, token);
+                if (!result) {
+                    return undefined;
+                }
+                return new vscode.Hover(
+                    result.contents.map((c) => new vscode.MarkdownString(c)),
+                    result.range ? new vscode.Range(
+                        result.range.start.line, result.range.start.character,
+                        result.range.end.line, result.range.end.character,
+                    ) : undefined,
+                );
+            },
+        },
+    );
+
+    const diagnosticProvider = new ActionDiagnosticProvider();
+    const diagnosticCollection = vscode.languages.createDiagnosticCollection('executableTalkActions');
+
+    function updateDiagnostics(document: vscode.TextDocument): void {
+        if (document.languageId !== 'deck-markdown') {
+            return;
+        }
+        const results = diagnosticProvider.computeDiagnostics(document);
+        const vscDiags = results.map((d) => {
+            const diag = new vscode.Diagnostic(
+                new vscode.Range(
+                    d.range.start.line, d.range.start.character,
+                    d.range.end.line, d.range.end.character,
+                ),
+                d.message,
+                d.severity as number,
+            );
+            diag.source = d.source;
+            return diag;
+        });
+        diagnosticCollection.set(document.uri, vscDiags);
+    }
+
+    // Update diagnostics on document open and change
+    const onChangeDisposable = vscode.workspace.onDidChangeTextDocument((e) => {
+        updateDiagnostics(e.document);
+    });
+    const onOpenDisposable = vscode.workspace.onDidOpenTextDocument((doc) => {
+        updateDiagnostics(doc);
+    });
+    const onCloseDisposable = vscode.workspace.onDidCloseTextDocument((doc) => {
+        diagnosticCollection.delete(doc.uri);
+    });
+
+    // Update diagnostics for all currently open deck-markdown documents
+    for (const doc of vscode.workspace.textDocuments) {
+        updateDiagnostics(doc);
+    }
+
     context.subscriptions.push(
         openPresentationDisposable,
         closePresentationDisposable,
         resetPresentationDisposable,
         nextSlideDisposable,
         previousSlideDisposable,
-        openPresenterViewDisposable
+        openPresenterViewDisposable,
+        validateDeckDisposable,
+        completionDisposable,
+        hoverDisposable,
+        diagnosticCollection,
+        onChangeDisposable,
+        onOpenDisposable,
+        onCloseDisposable,
+        { dispose() { diagnosticProvider.dispose(); } }
     );
 }
 

@@ -107,6 +107,7 @@ A floating toolbar appears in the bottom-right corner when you hover over the pr
 | `Executable Talk: Next Slide` | Navigate to the next slide |
 | `Executable Talk: Previous Slide` | Navigate to the previous slide |
 | `Executable Talk: Open Presenter View` | Show speaker notes and next slide preview |
+| `Executable Talk: Validate Deck` | Run preflight checks on the current `.deck.md` file |
 
 ## Action Reference
 
@@ -199,6 +200,99 @@ Executes any VS Code command. **Requires Workspace Trust.**
 ```
 
 ## Dynamic Content Rendering
+
+### Action Block Syntax (YAML)
+
+In addition to inline action links, you can define actions using readable YAML fenced code blocks. Both syntaxes coexist — use whichever you prefer:
+
+**Before (inline link — URL-encoded):**
+
+```markdown
+[Open Main](action:file.open?path=src/main.ts)
+```
+
+**After (YAML action block — human-readable):**
+
+````markdown
+```action
+type: file.open
+path: src/main.ts
+label: Open Main
+```
+````
+
+Action blocks support all 6 action types. Here are some examples:
+
+````markdown
+```action
+type: editor.highlight
+path: src/main.ts
+lines: 5-10
+```
+````
+
+````markdown
+```action
+type: terminal.run
+command: npm test
+label: Run Tests
+```
+````
+
+````markdown
+```action
+type: sequence
+label: Full Demo
+steps:
+  - type: file.open
+    path: src/main.ts
+  - type: editor.highlight
+    path: src/main.ts
+    lines: 5-10
+  - type: terminal.run
+    command: npm test
+```
+````
+
+### Preflight Deck Validation
+
+Before presenting, validate your deck to catch common errors:
+
+1. Press `Cmd+Shift+P` / `Ctrl+Shift+P`
+2. Run **Executable Talk: Validate Deck**
+
+The command checks for:
+- **Missing files** — referenced file paths that don't exist
+- **Out-of-range lines** — highlight ranges exceeding file length
+- **Missing debug configurations** — `debug.start` configs not in launch.json
+- **Unavailable commands** — terminal commands not found on PATH
+- **Trust issues** — actions requiring trust in untrusted workspaces
+
+Results appear as:
+- **Inline diagnostics** (squiggly underlines) in the `.deck.md` file
+- **Output channel** (Executable Talk Validation) with a detailed log
+- **Summary notification** with a link to the Problems panel
+
+### Error Notifications During Presentation
+
+When an action fails during a live presentation, a toast notification appears in the bottom-right corner showing:
+
+- **Action type icon** (📄 file, 🔍 highlight, ▶ terminal, 🐛 debug, 🔗 sequence)
+- **Target** (which file, command, or config failed)
+- **Error message** (what went wrong)
+- **Step breakdown** (for sequences: ✅ success, ❌ failed, ⏭ skipped)
+
+Toasts auto-dismiss after 8 seconds for simple failures. Sequence failures and timeouts persist until manually dismissed. Up to 5 toasts can stack.
+
+### Authoring Assistance
+
+When editing `.deck.md` files, you get full IDE support inside action blocks:
+
+- **Autocomplete**: Type suggestions after `type:`, parameter suggestions scoped to the selected action type, triggered by `:` and `/`
+- **Hover documentation**: Hover on action type keywords to see descriptions and parameter tables. Hover on parameter names for type info and allowed values.
+- **Real-time diagnostics**: Squiggly underlines for unknown action types (error), missing required parameters (error), unknown parameter keys (warning), and invalid YAML syntax (error)
+
+## Dynamic Content Rendering (Render Directives)
 
 Embed live content directly in your slides using render directives. These are invisible links that get replaced with actual content when the slide is displayed.
 

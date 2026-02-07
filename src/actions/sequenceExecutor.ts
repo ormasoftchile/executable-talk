@@ -5,7 +5,7 @@
 
 import { Action, SequenceParams, ActionType, createAction } from '../models/action';
 import { ActionExecutor, ExecutionContext, ExecutionResult, BaseActionExecutor } from './types';
-import { ValidationError } from './errors';
+import { ValidationError, StepResult, SequenceErrorDetail } from './errors';
 import { getActionRegistry } from './registry';
 
 /**
@@ -60,6 +60,11 @@ function parseActionsString(actionsStr: string): Array<{ type: ActionType; param
 }
 
 /**
+ * Step definition that supports both nested params and flat YAML-style keys.
+ */
+type StepDef = { type: ActionType; params?: Record<string, unknown>; [key: string]: unknown };
+
+/**
  * Executor for sequence action type
  */
 export class SequenceExecutor extends BaseActionExecutor implements ActionExecutor<SequenceParams> {
@@ -103,12 +108,27 @@ export class SequenceExecutor extends BaseActionExecutor implements ActionExecut
     try {
       this.validate(params);
 
-      // Parse steps from either format
-      let steps: Array<{ type: ActionType; params: Record<string, unknown> }>;
+      // Normalize steps — they may come from URL-encoded string, from the
+      // model's ActionDefinition[] (with nested params), or from raw YAML
+      // objects where params are flat siblings of `type`.
+      let steps: StepDef[];
       if (params.actions && typeof params.actions === 'string') {
         steps = parseActionsString(params.actions);
       } else if (params.steps) {
-        steps = params.steps;
+        steps = (params.steps as unknown as Array<Record<string, unknown>>).map(raw => {
+          // If step already has a params sub-object, pass through
+          if (raw.params && typeof raw.params === 'object' && !Array.isArray(raw.params)) {
+            return raw as StepDef;
+          }
+          // Otherwise, extract flat keys into params (YAML style)
+          const extracted: Record<string, unknown> = {};
+          for (const [key, value] of Object.entries(raw)) {
+            if (key !== 'type') {
+              extracted[key] = value;
+            }
+          }
+          return { type: raw.type as ActionType, params: extracted };
+        });
       } else {
         return this.failure('No steps or actions provided', startTime);
       }
@@ -118,34 +138,82 @@ export class SequenceExecutor extends BaseActionExecutor implements ActionExecut
       const stopOnError = params.stopOnError ?? true;
 
       const completedUndos: Array<() => Promise<void>> = [];
+      const stepResults: StepResult[] = [];
 
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
+        const stepTarget = extractStepTarget(step);
 
         // Check for cancellation
         if (context.cancellationToken.isCancellationRequested) {
-          return this.failure('Sequence cancelled', startTime);
+          // Mark remaining steps as skipped
+          for (let j = i; j < steps.length; j++) {
+            stepResults.push({
+              type: steps[j].type,
+              target: extractStepTarget(steps[j]),
+              status: 'skipped',
+            });
+          }
+          const failResult = this.failure('Sequence cancelled', startTime);
+          failResult.sequenceDetail = buildSequenceDetail(steps, stepResults, i);
+          return failResult;
         }
 
         // Get executor for step
         const executor = registry.get(step.type);
         if (!executor) {
           if (stopOnError) {
-            return this.failure(`Unknown action type in sequence: ${step.type}`, startTime);
+            stepResults.push({
+              type: step.type,
+              target: stepTarget,
+              status: 'failed',
+              error: `Unknown action type: ${step.type}`,
+            });
+            // Mark remaining as skipped
+            for (let j = i + 1; j < steps.length; j++) {
+              stepResults.push({
+                type: steps[j].type,
+                target: extractStepTarget(steps[j]),
+                status: 'skipped',
+              });
+            }
+            const failResult = this.failure(`Unknown action type in sequence: ${step.type}`, startTime);
+            failResult.sequenceDetail = buildSequenceDetail(steps, stepResults, i);
+            return failResult;
           }
+          stepResults.push({
+            type: step.type,
+            target: stepTarget,
+            status: 'skipped',
+          });
           context.outputChannel.appendLine(`[sequence] Skipping unknown action type: ${step.type}`);
           continue;
         }
 
-        // Create action for step
-        const stepAction = createAction(step.type, step.params, action.slideIndex);
+        // Create action for step (params already normalized above)
+        const stepAction = createAction(step.type, step.params ?? {}, action.slideIndex);
 
         // Execute step
         context.outputChannel.appendLine(`[sequence] Executing step ${i + 1}/${steps.length}: ${step.type}`);
         const result = await executor.execute(stepAction, context);
 
         if (!result.success) {
+          stepResults.push({
+            type: step.type,
+            target: stepTarget,
+            status: 'failed',
+            error: result.error,
+          });
+
           if (stopOnError) {
+            // Mark remaining as skipped
+            for (let j = i + 1; j < steps.length; j++) {
+              stepResults.push({
+                type: steps[j].type,
+                target: extractStepTarget(steps[j]),
+                status: 'skipped',
+              });
+            }
             // Try to undo completed steps
             for (const undo of completedUndos.reverse()) {
               try {
@@ -154,11 +222,20 @@ export class SequenceExecutor extends BaseActionExecutor implements ActionExecut
                 context.outputChannel.appendLine(`[sequence] Undo failed: ${e}`);
               }
             }
-            return this.failure(`Step ${i + 1} (${step.type}) failed: ${result.error}`, startTime);
+            const failResult = this.failure(`Step ${i + 1} (${step.type}) failed: ${result.error}`, startTime);
+            failResult.sequenceDetail = buildSequenceDetail(steps, stepResults, i);
+            return failResult;
           }
           context.outputChannel.appendLine(`[sequence] Step ${i + 1} failed: ${result.error}`);
-        } else if (result.undo) {
-          completedUndos.push(result.undo);
+        } else {
+          stepResults.push({
+            type: step.type,
+            target: stepTarget,
+            status: 'success',
+          });
+          if (result.undo) {
+            completedUndos.push(result.undo);
+          }
         }
 
         // Delay between steps (except after last step)
@@ -186,4 +263,40 @@ export class SequenceExecutor extends BaseActionExecutor implements ActionExecut
       );
     }
   }
+}
+
+/**
+ * Extract the primary target from a step's params (for toast display).
+ */
+function extractStepTarget(step: StepDef): string | undefined {
+  const p = step.params ?? {};
+  switch (step.type) {
+    case 'file.open':
+    case 'editor.highlight':
+      return typeof p.path === 'string' ? p.path : undefined;
+    case 'terminal.run':
+      return typeof p.command === 'string' ? p.command : undefined;
+    case 'debug.start':
+      return typeof p.configName === 'string' ? p.configName : undefined;
+    case 'vscode.command':
+      return typeof p.id === 'string' ? p.id : undefined;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Build SequenceErrorDetail from the collected step results.
+ */
+function buildSequenceDetail(
+  steps: StepDef[],
+  stepResults: StepResult[],
+  failedIndex: number
+): SequenceErrorDetail {
+  return {
+    totalSteps: steps.length,
+    failedStepIndex: failedIndex,
+    failedStepType: steps[failedIndex].type,
+    stepResults,
+  };
 }
