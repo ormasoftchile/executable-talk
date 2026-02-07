@@ -42,3 +42,7 @@ export {
   RenderedBlock,
   LoadingPlaceholder,
 } from './contentRenderer';
+
+export {
+  renderBlockElements,
+} from './blockElementRenderer';

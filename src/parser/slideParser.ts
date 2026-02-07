@@ -7,6 +7,7 @@ import matter from 'gray-matter';
 import MarkdownIt from 'markdown-it';
 import { Slide, SlideFrontmatter, createSlide } from '../models/slide';
 import { parseActionLinks } from './actionLinkParser';
+import { parseActionBlocks } from './actionBlockParser';
 import { parseRenderDirectives } from '../renderer';
 import { processFragments } from './fragmentProcessor';
 
@@ -24,9 +25,26 @@ const md = new MarkdownIt({
 const SLIDE_DELIMITER = /^---+\s*$/m;
 
 /**
+ * Accumulated parse warnings from the last parseSlides() call.
+ * Reset at the start of each parseSlides() invocation.
+ */
+let _lastParseWarnings: string[] = [];
+
+/**
+ * Get warnings from the most recent parseSlides() call.
+ * Returns action block parse errors formatted as human-readable strings.
+ */
+export function getLastParseWarnings(): string[] {
+  return _lastParseWarnings;
+}
+
+/**
  * Parse content into individual slides
  */
 export function parseSlides(content: string): Slide[] {
+  // Reset warnings
+  _lastParseWarnings = [];
+  
   // Split content on slide delimiter
   const rawSlides = splitOnDelimiter(content);
   
@@ -75,7 +93,7 @@ function parseSlideContent(index: number, rawContent: string): Slide {
   let content = rawContent;
   let frontmatter: SlideFrontmatter | undefined;
   
-  // Check if slide starts with frontmatter (---)
+  // Step 1: Check if slide starts with frontmatter (---)
   if (rawContent.startsWith('---')) {
     try {
       const parsed = matter(rawContent);
@@ -87,10 +105,21 @@ function parseSlideContent(index: number, rawContent: string): Slide {
     }
   }
   
-  // Render markdown to HTML
-  let html = md.render(content);
+  // Step 2: Parse action blocks (NEW — extracts elements + cleans content)
+  const actionBlockResult = parseActionBlocks(content, index);
+  const cleanedContent = actionBlockResult.cleanedContent;
   
-  // Process fragments and get count
+  // Accumulate action block parse errors as warnings (non-fatal)
+  for (const err of actionBlockResult.errors) {
+    _lastParseWarnings.push(
+      `Slide ${index + 1}, line ${err.line}: ${err.message}`
+    );
+  }
+  
+  // Step 3: Render markdown to HTML (uses cleaned content — no action blocks in output)
+  let html = md.render(cleanedContent);
+  
+  // Step 4: Process fragments and get count
   const { html: fragmentHtml, fragmentCount } = processFragments(html);
   html = fragmentHtml;
   
@@ -98,9 +127,11 @@ function parseSlideContent(index: number, rawContent: string): Slide {
   const slide = createSlide(index, content, html, frontmatter);
   slide.fragmentCount = fragmentCount;
   
-  // Parse interactive action links from content
-  const interactiveElements = parseActionLinks(content, index);
-  slide.interactiveElements = interactiveElements;
+  // Step 5: Parse interactive action links from original content (inline links still parsed)
+  const inlineElements = parseActionLinks(content, index);
+  
+  // Step 6: Merge block elements and inline elements into interactiveElements
+  slide.interactiveElements = [...actionBlockResult.elements, ...inlineElements];
   
   // Parse render directives from content
   const directives = parseRenderDirectives(content, index);

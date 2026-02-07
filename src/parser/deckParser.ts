@@ -5,7 +5,7 @@
 
 import matter from 'gray-matter';
 import { Deck, DeckMetadata, createDeck } from '../models/deck';
-import { parseSlides } from './slideParser';
+import { parseSlides, getLastParseWarnings } from './slideParser';
 
 /**
  * Parse result with potential errors
@@ -14,6 +14,8 @@ export interface ParseResult {
   deck?: Deck;
   error?: string;
   errorLine?: number;
+  /** Non-fatal warnings (e.g., action block parse errors) — deck still loads */
+  warnings?: string[];
 }
 
 /**
@@ -37,7 +39,10 @@ export function parseDeck(content: string, filePath: string): ParseResult {
 
     const deck = createDeck(filePath, slides, metadata as DeckMetadata);
 
-    return { deck };
+    // Collect action block parse warnings (non-fatal)
+    const warnings = getLastParseWarnings();
+
+    return { deck, warnings: warnings.length > 0 ? warnings : undefined };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown parse error';
     return {
