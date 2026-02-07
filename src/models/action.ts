@@ -66,8 +66,8 @@ export interface EditorHighlightParams {
  * Parameters for terminal.run action
  */
 export interface TerminalRunParams {
-  /** Command to execute */
-  command: string;
+  /** Command to execute — string or cross-platform command map */
+  command: string | Record<string, string>;
   /** Terminal name */
   name?: string;
   /** Whether to run in background */

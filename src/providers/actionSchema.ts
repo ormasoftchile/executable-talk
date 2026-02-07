@@ -20,7 +20,7 @@ export interface ActionParameterSchema {
   /** Parameter name (e.g., 'path', 'lines', 'command') */
   name: string;
   /** Parameter value type */
-  type: 'string' | 'number' | 'boolean' | 'array';
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   /** Whether the parameter is required */
   required: boolean;
   /** Human-readable description for hover/completion docs */
@@ -152,7 +152,7 @@ export const ACTION_SCHEMAS: ReadonlyMap<ActionType, ActionSchema> = new Map<Act
           name: 'command',
           type: 'string',
           required: true,
-          description: 'Command to execute in the terminal.',
+          description: 'Command to execute in the terminal. Can be a plain string or a platform command map object with keys: macos, windows, linux, default. Example: { macos: "open .", windows: "explorer .", default: "xdg-open ." }. Supports placeholders: ${pathSep}, ${home}, ${shell}, ${pathDelimiter}.',
         },
         {
           name: 'name',

@@ -8,11 +8,17 @@ import * as path from 'path';
 import { Action, TerminalRunParams } from '../models/action';
 import { ActionExecutor, ExecutionContext, ExecutionResult, BaseActionExecutor } from './types';
 import { ValidationError } from './errors';
+import { PlatformResolver, isPlatformCommandMap } from './platformResolver';
 
 /**
  * Track terminals created by the presentation
  */
 const presentationTerminals = new Map<string, vscode.Terminal>();
+
+/**
+ * Shared PlatformResolver instance
+ */
+const platformResolver = new PlatformResolver();
 
 /**
  * Executor for terminal.run action type
@@ -24,8 +30,13 @@ export class TerminalRunExecutor extends BaseActionExecutor implements ActionExe
   override readonly defaultTimeoutMs = 30000;
 
   validate(params: TerminalRunParams): void {
-    if (!params.command || typeof params.command !== 'string') {
-      throw new ValidationError('terminal.run', 'command', 'command is required and must be a string');
+    if (!params.command) {
+      throw new ValidationError('terminal.run', 'command', 'command is required');
+    }
+
+    // Accept string or PlatformCommandMap object
+    if (typeof params.command !== 'string' && !isPlatformCommandMap(params.command)) {
+      throw new ValidationError('terminal.run', 'command', 'command must be a string or a platform command map');
     }
 
     if (params.name !== undefined && typeof params.name !== 'string') {
@@ -73,6 +84,16 @@ export class TerminalRunExecutor extends BaseActionExecutor implements ActionExe
         presentationTerminals.set(terminalName, terminal);
       }
 
+      // Resolve cross-platform command
+      const resolved = platformResolver.resolve(params.command as string | import('./platformResolver').PlatformCommandMap);
+      if (resolved.command === undefined) {
+        return this.failure(
+          resolved.error || `Command not available on ${resolved.platform}`,
+          startTime
+        );
+      }
+      const resolvedCommand = resolved.command;
+
       // Clear terminal if requested
       if (params.clear) {
         // Send clear command based on platform
@@ -87,9 +108,9 @@ export class TerminalRunExecutor extends BaseActionExecutor implements ActionExe
       }
 
       // Send command
-      terminal.sendText(params.command);
+      terminal.sendText(resolvedCommand);
 
-      context.outputChannel.appendLine(`[terminal.run] Executed: ${params.command}`);
+      context.outputChannel.appendLine(`[terminal.run] Executed: ${resolvedCommand} (platform: ${resolved.platform}, source: ${resolved.source})`);
 
       // If background, return immediately
       if (params.background) {

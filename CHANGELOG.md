@@ -5,6 +5,51 @@ All notable changes to the Executable Talk extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-08
+
+### Added
+
+- **Non-Linear Navigation** (US1): Jump to any slide during Q&A without sequential clicking
+  - Slide picker overlay (`Ctrl+G` / `Cmd+G`) with search, filter, and keyboard navigation
+  - Jump-by-number input: type digit keys + Enter to go directly to a slide
+  - Go back (`Alt+Left`) returns to the previously viewed slide, not the sequentially previous one
+  - Navigation history stack (50-entry FIFO) tracks all slide visits
+
+- **Scene Checkpoints** (US2): Save and restore complete IDE state as named scenes
+  - Save scene (`Ctrl+S` / `Cmd+S`): captures open files, cursor positions, terminals, and active slide
+  - Restore scene (`Ctrl+R` / `Cmd+R`): returns IDE to the exact saved state
+  - Scene picker overlay with search, keyboard navigation, and delete support
+  - Up to 20 runtime-saved scenes per session; overwriting by name does not count against limit
+  - Partial restore: skips missing files/terminals and shows a non-blocking warning summary
+  - Pre-authored scene anchors in deck YAML frontmatter (read-only, available on presentation open)
+
+- **Cross-Platform Commands** (US3): Terminal commands that adapt to the presenter's OS
+  - Platform command map: `command: { macos: "...", windows: "...", linux: "...", default: "..." }`
+  - Automatic OS detection and command resolution at execution time
+  - Path placeholders: `${pathSep}`, `${home}`, `${shell}`, `${pathDelimiter}`
+  - Preflight validation warns about missing platform coverage for the current OS
+
+- **Navigation History Trail** (US4): Breadcrumb trail of visited slides
+  - Visual breadcrumb bar at the bottom of the presentation (up to 10 recent entries)
+  - Icons for navigation method: → sequential, ⤳ jump, ← go-back, 📌 scene restore
+  - Click any breadcrumb to jump to that slide
+  - Semi-transparent, fades in on hover to stay unobtrusive
+
+- **Pre-Authored Scene Anchors** (US5): Define scene checkpoints declaratively in frontmatter
+  - `scenes: [{ name: "intro", slide: 1 }, { name: "live-demo", slide: 8 }]`
+  - Authored scenes appear in scene picker labeled "authored" (listed first, alphabetically sorted)
+  - Restoring an authored scene navigates to the anchored slide and executes onEnter actions
+  - Authored scenes are read-only: cannot be overwritten or deleted
+
+- **Authoring enhancements**:
+  - Autocomplete for `scenes` frontmatter properties (`name`, `slide`)
+  - Hover documentation for `scenes`, `name`, and `slide` in frontmatter
+  - ARIA roles and labels on all overlay components (slide picker, scene picker, breadcrumb trail, toast)
+
+- **New commands**: `Go to Slide`, `Save Scene`, `Restore Scene`
+- **New keybindings**: `Ctrl+G`, `Ctrl+S`, `Ctrl+R` (scoped to presentation Webview)
+- **New example deck**: `examples/cross-platform.deck.md` showcasing all new features
+
 ## [0.2.0] - 2026-02-07
 
 ### Added

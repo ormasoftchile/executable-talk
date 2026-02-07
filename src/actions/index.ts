@@ -18,6 +18,9 @@ export { VscodeCommandExecutor } from './vscodeCommandExecutor';
 // Pipeline
 export { executeWithPipeline, actionRequiresTrust, createExecutionContext } from './executionPipeline';
 
+// Platform resolution
+export { PlatformResolver } from './platformResolver';
+
 // Import executors and registry for registration
 import { getActionRegistry } from './registry';
 import { FileOpenExecutor } from './fileOpenExecutor';

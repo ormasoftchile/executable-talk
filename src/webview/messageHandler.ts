@@ -1,6 +1,7 @@
 /**
  * Message handler with type guards and dispatch
- * Per contracts/message-protocol.md
+ * Per contracts/message-protocol.md, contracts/navigation-protocol.md,
+ * and contracts/scene-store.md
  */
 
 import {
@@ -12,6 +13,10 @@ import {
   CloseMessage,
   ReadyMessage,
   VscodeCommandMessage,
+  GoBackMessage,
+  SaveSceneMessage,
+  RestoreSceneMessage,
+  DeleteSceneMessage,
 } from './messages';
 
 // ============================================================================
@@ -68,6 +73,34 @@ export function isVscodeCommandMessage(msg: unknown): msg is VscodeCommandMessag
 }
 
 /**
+ * Check if message is a go back message
+ */
+export function isGoBackMessage(msg: unknown): msg is GoBackMessage {
+  return isMessage(msg) && msg.type === 'goBack';
+}
+
+/**
+ * Check if message is a save scene message
+ */
+export function isSaveSceneMessage(msg: unknown): msg is SaveSceneMessage {
+  return isMessage(msg) && msg.type === 'saveScene';
+}
+
+/**
+ * Check if message is a restore scene message
+ */
+export function isRestoreSceneMessage(msg: unknown): msg is RestoreSceneMessage {
+  return isMessage(msg) && msg.type === 'restoreScene';
+}
+
+/**
+ * Check if message is a delete scene message
+ */
+export function isDeleteSceneMessage(msg: unknown): msg is DeleteSceneMessage {
+  return isMessage(msg) && msg.type === 'deleteScene';
+}
+
+/**
  * Base message type check
  */
 function isMessage(msg: unknown): msg is { type: string } {
@@ -103,6 +136,10 @@ export interface MessageHandlers {
   onClose?: (message: CloseMessage) => void | Promise<void>;
   onReady?: (message: ReadyMessage) => void | Promise<void>;
   onVscodeCommand?: (message: VscodeCommandMessage) => void | Promise<void>;
+  onGoBack?: (message: GoBackMessage) => void | Promise<void>;
+  onSaveScene?: (message: SaveSceneMessage) => void | Promise<void>;
+  onRestoreScene?: (message: RestoreSceneMessage) => void | Promise<void>;
+  onDeleteScene?: (message: DeleteSceneMessage) => void | Promise<void>;
 }
 
 /**
@@ -130,6 +167,14 @@ export function createMessageDispatcher(handlers: MessageHandlers) {
         await handlers.onReady(message);
       } else if (isVscodeCommandMessage(message) && handlers.onVscodeCommand) {
         await handlers.onVscodeCommand(message);
+      } else if (isGoBackMessage(message) && handlers.onGoBack) {
+        await handlers.onGoBack(message);
+      } else if (isSaveSceneMessage(message) && handlers.onSaveScene) {
+        await handlers.onSaveScene(message);
+      } else if (isRestoreSceneMessage(message) && handlers.onRestoreScene) {
+        await handlers.onRestoreScene(message);
+      } else if (isDeleteSceneMessage(message) && handlers.onDeleteScene) {
+        await handlers.onDeleteScene(message);
       } else {
         console.warn('Unhandled message type:', (message as WebviewToHostMessage).type);
       }
@@ -147,7 +192,10 @@ export function parseMessage(data: unknown): WebviewToHostMessage | null {
     return null;
   }
 
-  const validTypes = ['navigate', 'executeAction', 'undo', 'redo', 'close', 'ready', 'vscodeCommand'];
+  const validTypes = [
+    'navigate', 'executeAction', 'undo', 'redo', 'close', 'ready', 'vscodeCommand',
+    'goBack', 'saveScene', 'restoreScene', 'deleteScene',
+  ];
   if (!validTypes.includes(data.type)) {
     return null;
   }

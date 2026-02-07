@@ -16,6 +16,11 @@ export interface EditorState {
     start: number;
     end: number;
   };
+  /** Cursor position in the editor */
+  cursorPosition?: {
+    line: number;
+    character: number;
+  };
   /** Whether file was opened by presentation */
   wasOpenedByPresentation: boolean;
 }
