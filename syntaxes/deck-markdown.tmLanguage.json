@@ -1,0 +1,109 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Deck Markdown",
+  "scopeName": "text.html.markdown.deck",
+  "patterns": [
+    { "include": "#deck-frontmatter" },
+    { "include": "#action-fenced-block" },
+    { "include": "#action-link" },
+    { "include": "#render-directive" },
+    { "include": "text.html.markdown" }
+  ],
+  "repository": {
+    "deck-frontmatter": {
+      "name": "meta.frontmatter.deck-markdown",
+      "begin": "\\A(-{3})\\s*$",
+      "end": "^(-{3})\\s*$",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.frontmatter.begin.deck-markdown" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.frontmatter.end.deck-markdown" }
+      },
+      "patterns": [
+        { "include": "#frontmatter-keys" },
+        { "include": "source.yaml" }
+      ]
+    },
+    "frontmatter-keys": {
+      "match": "^(title|author|theme|date|version)(:)\\s*(.*)",
+      "captures": {
+        "1": { "name": "keyword.other.frontmatter.deck-markdown" },
+        "2": { "name": "punctuation.separator.key-value.yaml" },
+        "3": { "name": "string.unquoted.yaml" }
+      }
+    },
+    "action-fenced-block": {
+      "name": "meta.embedded.block.action.deck-markdown",
+      "begin": "^\\s*(`{3,})\\s*(action)\\s*$",
+      "end": "^\\s*\\1\\s*$",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.code.fenced.begin.deck-markdown" },
+        "2": { "name": "entity.name.tag.action.deck-markdown" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.code.fenced.end.deck-markdown" }
+      },
+      "patterns": [
+        { "include": "#action-block-keys" },
+        { "include": "source.yaml" }
+      ]
+    },
+    "action-block-keys": {
+      "patterns": [
+        {
+          "match": "^\\s*(type)(:)\\s*(file\\.open|editor\\.highlight|terminal\\.run|debug\\.start|vscode\\.command|sequence)",
+          "captures": {
+            "1": { "name": "keyword.other.action-key.deck-markdown" },
+            "2": { "name": "punctuation.separator.key-value.yaml" },
+            "3": { "name": "constant.other.action-type.deck-markdown" }
+          }
+        },
+        {
+          "match": "^\\s*(type|params|requiresTrust|actions)(:)",
+          "captures": {
+            "1": { "name": "keyword.other.action-key.deck-markdown" },
+            "2": { "name": "punctuation.separator.key-value.yaml" }
+          }
+        },
+        {
+          "match": "^\\s*(path|lines|command|config|id|format|ref|cmd)(:)",
+          "captures": {
+            "1": { "name": "support.type.property-name.action-param.deck-markdown" },
+            "2": { "name": "punctuation.separator.key-value.yaml" }
+          }
+        }
+      ]
+    },
+    "action-link": {
+      "name": "meta.link.action.deck-markdown",
+      "match": "(\\[)([^\\]]*)(\\])(\\()(action)(:)([a-zA-Z][a-zA-Z0-9.]*)(\\?[^)]*)?(\\))",
+      "captures": {
+        "1": { "name": "punctuation.definition.link.begin.markdown" },
+        "2": { "name": "string.other.link.title.action.deck-markdown" },
+        "3": { "name": "punctuation.definition.link.end.markdown" },
+        "4": { "name": "punctuation.definition.metadata.begin.markdown" },
+        "5": { "name": "keyword.other.action.deck-markdown" },
+        "6": { "name": "punctuation.separator.action.deck-markdown" },
+        "7": { "name": "entity.name.type.action.deck-markdown" },
+        "8": { "name": "variable.parameter.action.deck-markdown" },
+        "9": { "name": "punctuation.definition.metadata.end.markdown" }
+      }
+    },
+    "render-directive": {
+      "name": "meta.link.render.deck-markdown",
+      "match": "(\\[)([^\\]]*)(\\])(\\()(render)(:)([a-zA-Z][a-zA-Z0-9.]*)(\\?[^)]*)?(\\))",
+      "captures": {
+        "1": { "name": "punctuation.definition.link.begin.markdown" },
+        "2": { "name": "string.other.link.title.render.deck-markdown" },
+        "3": { "name": "punctuation.definition.link.end.markdown" },
+        "4": { "name": "punctuation.definition.metadata.begin.markdown" },
+        "5": { "name": "keyword.other.render.deck-markdown" },
+        "6": { "name": "punctuation.separator.render.deck-markdown" },
+        "7": { "name": "entity.name.type.render.deck-markdown" },
+        "8": { "name": "variable.parameter.render.deck-markdown" },
+        "9": { "name": "punctuation.definition.metadata.end.markdown" }
+      }
+    }
+  }
+}

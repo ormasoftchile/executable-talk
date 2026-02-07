@@ -36,6 +36,7 @@
   "activationEvents": [
     "onCommand:executableTalk.openPresentation",
     "onLanguage:markdown",
+    "onLanguage:deck-markdown",
     "workspaceContains:**/*.deck.md"
   ],
   "main": "./out/src/extension.js",
@@ -82,7 +83,28 @@
         ],
         "configuration": "./language-configuration.json"
       }
-    ]
+    ],
+    "grammars": [
+      {
+        "language": "deck-markdown",
+        "scopeName": "text.html.markdown.deck",
+        "path": "./syntaxes/deck-markdown.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.frontmatter.deck-markdown": "yaml",
+          "meta.embedded.block.action.deck-markdown": "yaml"
+        }
+      }
+    ],
+    "configuration": {
+      "title": "Executable Talk",
+      "properties": {
+        "executableTalk.useLsp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the Language Server Protocol for autocomplete, validation, hover, and other editing features. When disabled, falls back to the legacy provider-based implementation."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -123,6 +145,9 @@
   "dependencies": {
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
-    "markdown-it": "^14.0.0"
+    "markdown-it": "^14.0.0",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
   }
 }
