@@ -5,6 +5,37 @@ All notable changes to the Executable Talk extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-07
+
+### Added
+
+- **YAML Action Block Syntax** (US1): Human-readable fenced code blocks as an alternative to URL-encoded inline action links
+  - Use `` ```action `` fences with YAML content (type, params, label)
+  - All 6 action types supported: `file.open`, `editor.highlight`, `terminal.run`, `debug.start`, `sequence`, `vscode.command`
+  - Both syntaxes coexist — inline links and YAML blocks work side by side
+  - Parse errors reported at deck level without blocking presentation loading
+
+- **Preflight Deck Validation** (US2): Validate entire deck before presenting
+  - New command: `Executable Talk: Validate Deck` (`executableTalk.validateDeck`)
+  - File path validation — checks referenced files exist
+  - Line range validation — checks highlight ranges don't exceed file length
+  - Debug config validation — verifies launch configurations exist
+  - Command availability check — warns when terminal commands not found on PATH
+  - Trust status check — warns about trust-requiring actions in untrusted workspaces
+  - Results shown as inline diagnostics, output channel log, and summary notification
+
+- **Error Feedback Toasts** (US3): Non-blocking error notifications during live presentations
+  - Toast notifications for action failures with type icon, target, and error message
+  - Sequence failure detail showing per-step breakdown (✅/❌/⏭)
+  - Auto-dismiss after 8s for simple failures; sequence and timeout errors persist
+  - Up to 5 toasts stacked, oldest auto-dismissible evicted on overflow
+  - Smooth entry/exit animations, hover pauses auto-dismiss timer
+
+- **Authoring Assistance** (US4): Full IDE support when writing action blocks
+  - Autocomplete for action types and parameters (scoped to selected type)
+  - Hover documentation with descriptions, parameter tables, and allowed values
+  - Real-time diagnostics for unknown types, missing required params, unknown keys, and invalid YAML
+
 ## [0.1.28] - 2026-01-21
 
 ### Added
