@@ -68,6 +68,38 @@
       {
         "command": "executableTalk.validateDeck",
         "title": "Executable Talk: Validate Deck"
+      },
+      {
+        "command": "executableTalk.goToSlide",
+        "title": "Executable Talk: Go to Slide"
+      },
+      {
+        "command": "executableTalk.saveScene",
+        "title": "Executable Talk: Save Scene"
+      },
+      {
+        "command": "executableTalk.restoreScene",
+        "title": "Executable Talk: Restore Scene"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "executableTalk.goToSlide",
+        "key": "ctrl+g",
+        "mac": "cmd+g",
+        "when": "activeWebviewPanelId == 'executableTalkPresentation'"
+      },
+      {
+        "command": "executableTalk.saveScene",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "activeWebviewPanelId == 'executableTalkPresentation'"
+      },
+      {
+        "command": "executableTalk.restoreScene",
+        "key": "ctrl+r",
+        "mac": "cmd+r",
+        "when": "activeWebviewPanelId == 'executableTalkPresentation'"
       }
     ],
     "languages": [
@@ -81,6 +113,13 @@
           ".deck.md"
         ],
         "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "deck-markdown",
+        "scopeName": "text.html.markdown.deck",
+        "path": "./syntaxes/deck-markdown.tmLanguage.json"
       }
     ]
   },

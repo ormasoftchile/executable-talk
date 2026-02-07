@@ -1,9 +1,11 @@
 /**
  * Message protocol types for Webview ↔ Extension Host communication
- * Per contracts/message-protocol.md
+ * Per contracts/message-protocol.md, contracts/navigation-protocol.md,
+ * and contracts/scene-store.md
  */
 
 import { ActionStatus, ActionType } from '../models/action';
+import { NavigationHistoryBreadcrumb } from '../models/deck';
 import { SequenceErrorDetail } from '../actions/errors';
 
 // ============================================================================
@@ -78,6 +80,48 @@ export interface VscodeCommandMessage {
 }
 
 /**
+ * Go back to the previously viewed slide (not sequentially previous).
+ * Per contracts/navigation-protocol.md.
+ */
+export interface GoBackMessage {
+  type: 'goBack';
+  payload: Record<string, never>;
+}
+
+/**
+ * Save the current IDE state as a named scene.
+ * Per contracts/scene-store.md.
+ */
+export interface SaveSceneMessage {
+  type: 'saveScene';
+  payload: {
+    sceneName: string;
+  };
+}
+
+/**
+ * Restore a previously saved scene.
+ * Per contracts/scene-store.md.
+ */
+export interface RestoreSceneMessage {
+  type: 'restoreScene';
+  payload: {
+    sceneName: string;
+  };
+}
+
+/**
+ * Delete a runtime-saved scene.
+ * Per contracts/scene-store.md.
+ */
+export interface DeleteSceneMessage {
+  type: 'deleteScene';
+  payload: {
+    sceneName: string;
+  };
+}
+
+/**
  * Union of all Webview → Host messages
  */
 export type WebviewToHostMessage =
@@ -87,7 +131,11 @@ export type WebviewToHostMessage =
   | RedoMessage
   | CloseMessage
   | ReadyMessage
-  | VscodeCommandMessage;
+  | VscodeCommandMessage
+  | GoBackMessage
+  | SaveSceneMessage
+  | RestoreSceneMessage
+  | DeleteSceneMessage;
 
 // ============================================================================
 // Extension Host → Webview Messages
@@ -109,6 +157,12 @@ export interface SlideChangedMessage {
     showAllFragments?: boolean;
     /** Total number of fragments in this slide */
     fragmentCount?: number;
+    /** Recent navigation history trail. Per contracts/navigation-protocol.md. */
+    navigationHistory?: NavigationHistoryBreadcrumb[];
+    /** Whether the user can navigate back (history has entries). */
+    canGoBack?: boolean;
+    /** Total number of entries in the navigation history (may exceed the breadcrumb slice). */
+    totalHistoryEntries?: number;
   };
 }
 
@@ -188,6 +242,72 @@ export interface RenderBlockUpdateMessage {
 }
 
 /**
+ * Request the Webview to open the slide picker dialog.
+ * Per contracts/navigation-protocol.md.
+ */
+export interface OpenSlidePickerMessage {
+  type: 'openSlidePicker';
+  payload: {
+    slides: Array<{ index: number; title: string }>;
+    currentIndex: number;
+  };
+}
+
+/**
+ * Request the Webview to open the scene picker dialog.
+ * Per contracts/scene-store.md.
+ */
+export interface OpenScenePickerMessage {
+  type: 'openScenePicker';
+  payload: {
+    scenes: SceneListItem[];
+  };
+}
+
+/**
+ * A scene item in the scene picker.
+ */
+export interface SceneListItem {
+  name: string;
+  slideIndex: number;
+  isAuthored: boolean;
+  timestamp?: number;
+}
+
+/**
+ * Request the Webview to open the scene name input dialog.
+ * Per contracts/scene-store.md.
+ */
+export interface OpenSceneNameInputMessage {
+  type: 'openSceneNameInput';
+  payload: Record<string, never>;
+}
+
+/**
+ * Notify the Webview of scene list changes.
+ * Per contracts/scene-store.md.
+ */
+export interface SceneChangedMessage {
+  type: 'sceneChanged';
+  payload: {
+    scenes: SceneListItem[];
+    activeSceneName?: string;
+  };
+}
+
+/**
+ * Non-blocking warning notification.
+ * Per contracts/navigation-protocol.md (e.g., "end of deck" bounce).
+ */
+export interface WarningMessage {
+  type: 'warning';
+  payload: {
+    code: string;
+    message: string;
+  };
+}
+
+/**
  * Union of all Host → Webview messages
  */
 export type HostToWebviewMessage =
@@ -196,7 +316,12 @@ export type HostToWebviewMessage =
   | DeckLoadedMessage
   | ErrorMessage
   | TrustStatusChangedMessage
-  | RenderBlockUpdateMessage;
+  | RenderBlockUpdateMessage
+  | OpenSlidePickerMessage
+  | OpenScenePickerMessage
+  | OpenSceneNameInputMessage
+  | SceneChangedMessage
+  | WarningMessage;
 
 // ============================================================================
 // Payload types for convenience
@@ -208,6 +333,14 @@ export type DeckLoadedPayload = DeckLoadedMessage['payload'];
 export type ErrorPayload = ErrorMessage['payload'];
 export type TrustStatusChangedPayload = TrustStatusChangedMessage['payload'];
 export type RenderBlockUpdatePayload = RenderBlockUpdateMessage['payload'];
+export type OpenSlidePickerPayload = OpenSlidePickerMessage['payload'];
+export type OpenScenePickerPayload = OpenScenePickerMessage['payload'];
+export type OpenSceneNameInputPayload = OpenSceneNameInputMessage['payload'];
+export type SceneChangedPayload = SceneChangedMessage['payload'];
+export type WarningPayload = WarningMessage['payload'];
+export type SaveScenePayload = SaveSceneMessage['payload'];
+export type RestoreScenePayload = RestoreSceneMessage['payload'];
+export type DeleteScenePayload = DeleteSceneMessage['payload'];
 
 // ============================================================================
 // Error Codes

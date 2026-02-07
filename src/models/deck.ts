@@ -1,9 +1,36 @@
 /**
  * Deck types and interfaces for Executable Talk
- * Per data-model.md
+ * Per data-model.md and contracts/navigation-protocol.md
  */
 
 import { Slide } from './slide';
+
+/**
+ * Pre-authored scene anchor defined in deck YAML frontmatter.
+ * Per data-model.md.
+ */
+export interface SceneDefinition {
+  /** Human-readable scene name (unique within deck) */
+  name: string;
+  /** 1-based slide number this scene anchors to */
+  slide: number;
+}
+
+/**
+ * How the presenter arrived at a slide.
+ * Per data-model.md.
+ */
+export type NavigationMethod = 'sequential' | 'jump' | 'scene-restore' | 'history-click' | 'go-back';
+
+/**
+ * Lightweight breadcrumb DTO sent to Webview via slideChanged.
+ * Per contracts/navigation-protocol.md.
+ */
+export interface NavigationHistoryBreadcrumb {
+  slideIndex: number;
+  slideTitle?: string;
+  method: NavigationMethod;
+}
 
 /**
  * Toolbar button identifiers
@@ -38,6 +65,8 @@ export interface DeckMetadata {
   author?: string;
   /** Presentation display options */
   options?: PresentationOptions;
+  /** Authored scenes from deck frontmatter */
+  scenes?: SceneDefinition[];
   /** Additional properties */
   [key: string]: unknown;
 }

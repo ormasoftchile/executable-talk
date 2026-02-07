@@ -55,6 +55,33 @@
    */
   function setupKeyboardNavigation() {
     document.addEventListener('keydown', function (event) {
+      // If slide picker is open, handle its keyboard events instead
+      if (isSlidePickerOpen()) {
+        handleSlidePickerKeydown(event);
+        return;
+      }
+
+      // If digit accumulator is active, handle digit input
+      if (isDigitAccumulatorActive() && event.key >= '0' && event.key <= '9') {
+        event.preventDefault();
+        handleDigitInput(event.key);
+        return;
+      }
+
+      // Start digit accumulator on first digit press (T017)
+      if (event.key >= '0' && event.key <= '9' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        startDigitAccumulator(event.key);
+        return;
+      }
+
+      // Alt+Left: go back (T018)
+      if (event.key === 'ArrowLeft' && event.altKey) {
+        event.preventDefault();
+        sendMessage({ type: 'goBack', payload: {} });
+        return;
+      }
+
       // Prevent default for navigation keys
       const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Escape', ' ', 'Backspace'];
       if (navKeys.includes(event.key)) {
@@ -95,7 +122,18 @@
           break;
 
         case 'Escape':
-          closePresentation();
+          if (isDigitAccumulatorActive()) {
+            clearDigitAccumulator();
+          } else {
+            closePresentation();
+          }
+          break;
+
+        case 'Enter':
+          if (isDigitAccumulatorActive()) {
+            event.preventDefault();
+            confirmDigitAccumulator();
+          }
           break;
 
         case 'z':
@@ -224,6 +262,26 @@
           
         case 'renderBlockUpdate':
           handleRenderBlockUpdate(message);
+          break;
+
+        case 'openSlidePicker':
+          handleOpenSlidePicker(message);
+          break;
+
+        case 'openScenePicker':
+          handleOpenScenePicker(message);
+          break;
+
+        case 'openSceneNameInput':
+          handleOpenSceneNameInput(message);
+          break;
+
+        case 'sceneChanged':
+          handleSceneChanged(message);
+          break;
+
+        case 'warning':
+          handleWarning(message);
           break;
       }
     });
@@ -426,6 +484,9 @@
     
     updateSlideIndicator();
     updateNavigationButtons();
+
+    // Update breadcrumb trail (T040)
+    updateBreadcrumbTrail(payload.navigationHistory, payload.canGoBack, payload.totalHistoryEntries);
   }
 
   function handleDeckLoaded(message) {
@@ -761,6 +822,676 @@
         updateLoadingElapsed(block);
       }, 1000);
     });
+  }
+
+  // =========================================================================
+  // Slide Picker Overlay (T015, T019, T020)
+  // =========================================================================
+
+  var slidePickerOverlay = null;
+  var slidePickerSlides = [];
+  var slidePickerSelectedIndex = 0;
+
+  /**
+   * Check if the slide picker is currently open
+   */
+  function isSlidePickerOpen() {
+    return slidePickerOverlay !== null && slidePickerOverlay.style.display !== 'none';
+  }
+
+  /**
+   * Handle openSlidePicker message from extension host (T020)
+   */
+  function handleOpenSlidePicker(message) {
+    var payload = message.payload || message;
+    slidePickerSlides = payload.slides || [];
+    showSlidePicker(slidePickerSlides, payload.currentIndex || 0);
+  }
+
+  /**
+   * Show the slide picker overlay (T015)
+   */
+  function showSlidePicker(slides, currentIndex) {
+    // Create overlay if it doesn't exist
+    if (!slidePickerOverlay) {
+      slidePickerOverlay = document.createElement('div');
+      slidePickerOverlay.className = 'slide-picker-overlay';
+      slidePickerOverlay.setAttribute('role', 'dialog');
+      slidePickerOverlay.setAttribute('aria-label', 'Go to slide');
+      slidePickerOverlay.innerHTML =
+        '<div class="slide-picker">' +
+          '<div class="slide-picker__header">' +
+            '<input type="text" class="slide-picker__search" placeholder="Search slides or type a number..." autocomplete="off" />' +
+          '</div>' +
+          '<div class="slide-picker__list"></div>' +
+        '</div>';
+      document.body.appendChild(slidePickerOverlay);
+
+      // Click backdrop to close
+      slidePickerOverlay.addEventListener('click', function(e) {
+        if (e.target === slidePickerOverlay) {
+          hideSlidePicker();
+        }
+      });
+
+      // Search input filtering
+      var searchInput = slidePickerOverlay.querySelector('.slide-picker__search');
+      searchInput.addEventListener('input', function() {
+        filterSlidePickerList(searchInput.value);
+      });
+    }
+
+    // Populate and show
+    populateSlidePickerList(slides, currentIndex);
+    slidePickerOverlay.style.display = 'flex';
+    slidePickerSelectedIndex = 0;
+    highlightSlidePickerItem(0);
+
+    // Focus the search input
+    var searchInput = slidePickerOverlay.querySelector('.slide-picker__search');
+    searchInput.value = '';
+    setTimeout(function() { searchInput.focus(); }, 50);
+  }
+
+  /**
+   * Populate the slide picker list
+   */
+  function populateSlidePickerList(slides, currentIndex) {
+    var list = slidePickerOverlay.querySelector('.slide-picker__list');
+    list.innerHTML = '';
+
+    for (var i = 0; i < slides.length; i++) {
+      var item = document.createElement('div');
+      item.className = 'slide-picker__item' + (i === currentIndex ? ' slide-picker__item--current' : '');
+      item.dataset.index = slides[i].index;
+      item.innerHTML =
+        '<span class="slide-picker__number">' + (slides[i].index + 1) + '</span>' +
+        '<span class="slide-picker__title">' + escapeHtml(slides[i].title) + '</span>';
+
+      // Click to select (T019)
+      (function(slideIndex) {
+        item.addEventListener('click', function() {
+          selectSlideFromPicker(slideIndex);
+        });
+      })(slides[i].index);
+
+      list.appendChild(item);
+    }
+  }
+
+  /**
+   * Filter the slide picker list based on search query
+   */
+  function filterSlidePickerList(query) {
+    var list = slidePickerOverlay.querySelector('.slide-picker__list');
+    var items = list.querySelectorAll('.slide-picker__item');
+    var lowerQuery = query.toLowerCase().trim();
+    var firstVisible = -1;
+
+    for (var i = 0; i < items.length; i++) {
+      var number = items[i].querySelector('.slide-picker__number').textContent;
+      var title = items[i].querySelector('.slide-picker__title').textContent.toLowerCase();
+      var visible = !lowerQuery || number === lowerQuery || title.indexOf(lowerQuery) >= 0;
+      items[i].style.display = visible ? '' : 'none';
+      if (visible && firstVisible === -1) {
+        firstVisible = i;
+      }
+    }
+
+    // Reset selection to first visible item
+    slidePickerSelectedIndex = firstVisible >= 0 ? firstVisible : 0;
+    highlightSlidePickerItem(slidePickerSelectedIndex);
+  }
+
+  /**
+   * Highlight a slide picker item
+   */
+  function highlightSlidePickerItem(index) {
+    var list = slidePickerOverlay.querySelector('.slide-picker__list');
+    var items = list.querySelectorAll('.slide-picker__item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.toggle('slide-picker__item--selected', i === index);
+    }
+    // Scroll selected item into view
+    if (items[index]) {
+      items[index].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  /**
+   * Handle keyboard events when slide picker is open
+   */
+  function handleSlidePickerKeydown(event) {
+    var list = slidePickerOverlay.querySelector('.slide-picker__list');
+    var items = Array.from(list.querySelectorAll('.slide-picker__item')).filter(function(item) {
+      return item.style.display !== 'none';
+    });
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        slidePickerSelectedIndex = Math.min(slidePickerSelectedIndex + 1, items.length - 1);
+        highlightVisibleItem(items, slidePickerSelectedIndex);
+        break;
+
+      case 'ArrowUp':
+        event.preventDefault();
+        slidePickerSelectedIndex = Math.max(slidePickerSelectedIndex - 1, 0);
+        highlightVisibleItem(items, slidePickerSelectedIndex);
+        break;
+
+      case 'Enter':
+        event.preventDefault();
+        if (items[slidePickerSelectedIndex]) {
+          var slideIndex = parseInt(items[slidePickerSelectedIndex].dataset.index, 10);
+          selectSlideFromPicker(slideIndex);
+        }
+        break;
+
+      case 'Escape':
+        event.preventDefault();
+        hideSlidePicker();
+        break;
+    }
+  }
+
+  /**
+   * Highlight visible item by filtered index
+   */
+  function highlightVisibleItem(visibleItems, index) {
+    var list = slidePickerOverlay.querySelector('.slide-picker__list');
+    var allItems = list.querySelectorAll('.slide-picker__item');
+    for (var i = 0; i < allItems.length; i++) {
+      allItems[i].classList.remove('slide-picker__item--selected');
+    }
+    if (visibleItems[index]) {
+      visibleItems[index].classList.add('slide-picker__item--selected');
+      visibleItems[index].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  /**
+   * Select a slide from the picker and navigate (T019)
+   */
+  function selectSlideFromPicker(slideIndex) {
+    hideSlidePicker();
+    sendMessage({
+      type: 'navigate',
+      payload: { direction: 'goto', slideIndex: slideIndex },
+    });
+  }
+
+  /**
+   * Hide the slide picker overlay
+   */
+  function hideSlidePicker() {
+    if (slidePickerOverlay) {
+      slidePickerOverlay.style.display = 'none';
+    }
+  }
+
+  // =========================================================================
+  // Digit-Key Jump-by-Number Input (T017)
+  // =========================================================================
+
+  var digitAccumulator = '';
+  var digitTimerId = null;
+  var digitIndicator = null;
+  var DIGIT_TIMEOUT_MS = 1500;
+
+  /**
+   * Check if the digit accumulator is active
+   */
+  function isDigitAccumulatorActive() {
+    return digitAccumulator.length > 0;
+  }
+
+  /**
+   * Start the digit accumulator with the first digit
+   */
+  function startDigitAccumulator(digit) {
+    digitAccumulator = digit;
+    showDigitIndicator();
+    resetDigitTimer();
+  }
+
+  /**
+   * Handle additional digit input
+   */
+  function handleDigitInput(digit) {
+    digitAccumulator += digit;
+    updateDigitIndicator();
+    resetDigitTimer();
+  }
+
+  /**
+   * Confirm the accumulated digit as a slide number
+   */
+  function confirmDigitAccumulator() {
+    var slideNumber = parseInt(digitAccumulator, 10);
+    clearDigitAccumulator();
+
+    if (!isNaN(slideNumber) && slideNumber >= 1 && slideNumber <= totalSlides) {
+      // Convert 1-based to 0-based
+      sendMessage({
+        type: 'navigate',
+        payload: { direction: 'goto', slideIndex: slideNumber - 1 },
+      });
+    }
+  }
+
+  /**
+   * Clear the digit accumulator
+   */
+  function clearDigitAccumulator() {
+    digitAccumulator = '';
+    if (digitTimerId) {
+      clearTimeout(digitTimerId);
+      digitTimerId = null;
+    }
+    hideDigitIndicator();
+  }
+
+  /**
+   * Reset the auto-confirm timer
+   */
+  function resetDigitTimer() {
+    if (digitTimerId) {
+      clearTimeout(digitTimerId);
+    }
+    digitTimerId = setTimeout(function() {
+      confirmDigitAccumulator();
+    }, DIGIT_TIMEOUT_MS);
+  }
+
+  /**
+   * Show the digit indicator overlay
+   */
+  function showDigitIndicator() {
+    if (!digitIndicator) {
+      digitIndicator = document.createElement('div');
+      digitIndicator.className = 'digit-indicator';
+      document.body.appendChild(digitIndicator);
+    }
+    digitIndicator.textContent = digitAccumulator;
+    digitIndicator.style.display = 'block';
+  }
+
+  /**
+   * Update the digit indicator text
+   */
+  function updateDigitIndicator() {
+    if (digitIndicator) {
+      digitIndicator.textContent = digitAccumulator;
+    }
+  }
+
+  /**
+   * Hide the digit indicator
+   */
+  function hideDigitIndicator() {
+    if (digitIndicator) {
+      digitIndicator.style.display = 'none';
+    }
+  }
+
+  // =========================================================================
+  // Scene Picker & Name Input Handlers (T028, T029, T031, T032)
+  // =========================================================================
+
+  var sceneNameOverlay = null;
+  var scenePickerOverlay = null;
+  var cachedScenes = [];
+
+  /**
+   * Handle openScenePicker message from extension host (T029)
+   */
+  function handleOpenScenePicker(message) {
+    var payload = message.payload || message;
+    var scenes = payload.scenes || cachedScenes;
+    showScenePicker(scenes);
+  }
+
+  /**
+   * Handle openSceneNameInput message from extension host (T028)
+   */
+  function handleOpenSceneNameInput(_message) {
+    showSceneNameInput();
+  }
+
+  /**
+   * Handle sceneChanged message — update cached scene list (T031)
+   */
+  function handleSceneChanged(message) {
+    var payload = message.payload || message;
+    cachedScenes = payload.scenes || [];
+  }
+
+  /**
+   * Handle warning message — display non-blocking notification (T032)
+   */
+  function handleWarning(message) {
+    var payload = message.payload || message;
+    console.warn('[Webview] Warning:', payload.code, payload.message);
+    showActionOverlay(payload.message, 'warning');
+    setTimeout(hideActionOverlay, 2000);
+  }
+
+  // ---- Scene Name Input Overlay (T028) ----
+
+  /**
+   * Show the scene name input overlay
+   */
+  function showSceneNameInput() {
+    if (!sceneNameOverlay) {
+      sceneNameOverlay = document.createElement('div');
+      sceneNameOverlay.className = 'scene-name-overlay';
+      sceneNameOverlay.setAttribute('role', 'dialog');
+      sceneNameOverlay.setAttribute('aria-label', 'Save scene');
+      sceneNameOverlay.innerHTML =
+        '<div class="scene-name-dialog">' +
+          '<div class="scene-name-dialog__header">Save Scene</div>' +
+          '<input type="text" class="scene-name-dialog__input" placeholder="Scene name..." autocomplete="off" />' +
+          '<div class="scene-name-dialog__hint">Press Enter to save, Escape to cancel</div>' +
+        '</div>';
+      document.body.appendChild(sceneNameOverlay);
+
+      // Click backdrop to close
+      sceneNameOverlay.addEventListener('click', function(e) {
+        if (e.target === sceneNameOverlay) {
+          hideSceneNameInput();
+        }
+      });
+
+      var input = sceneNameOverlay.querySelector('.scene-name-dialog__input');
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          var name = input.value.trim();
+          if (name) {
+            sendMessage({ type: 'saveScene', payload: { sceneName: name } });
+            hideSceneNameInput();
+          }
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          hideSceneNameInput();
+        }
+      });
+    }
+
+    sceneNameOverlay.style.display = 'flex';
+    var input = sceneNameOverlay.querySelector('.scene-name-dialog__input');
+    input.value = '';
+    setTimeout(function() { input.focus(); }, 50);
+  }
+
+  /**
+   * Hide the scene name input overlay
+   */
+  function hideSceneNameInput() {
+    if (sceneNameOverlay) {
+      sceneNameOverlay.style.display = 'none';
+    }
+  }
+
+  // ---- Scene Picker Overlay (T029) ----
+
+  /**
+   * Show the scene picker overlay for restore
+   */
+  function showScenePicker(scenes) {
+    if (!scenePickerOverlay) {
+      scenePickerOverlay = document.createElement('div');
+      scenePickerOverlay.className = 'slide-picker-overlay';
+      scenePickerOverlay.setAttribute('role', 'dialog');
+      scenePickerOverlay.setAttribute('aria-label', 'Restore scene');
+      scenePickerOverlay.innerHTML =
+        '<div class="slide-picker">' +
+          '<div class="slide-picker__header">' +
+            '<input type="text" class="slide-picker__search" placeholder="Search scenes..." autocomplete="off" />' +
+          '</div>' +
+          '<div class="slide-picker__list scene-picker__list"></div>' +
+        '</div>';
+      document.body.appendChild(scenePickerOverlay);
+
+      scenePickerOverlay.addEventListener('click', function(e) {
+        if (e.target === scenePickerOverlay) {
+          hideScenePickerOverlay();
+        }
+      });
+
+      var searchInput = scenePickerOverlay.querySelector('.slide-picker__search');
+      searchInput.addEventListener('input', function() {
+        filterScenePickerList(searchInput.value);
+      });
+      searchInput.addEventListener('keydown', function(e) {
+        handleScenePickerKeydown(e);
+      });
+    }
+
+    populateScenePickerList(scenes);
+    scenePickerOverlay.style.display = 'flex';
+    var searchInput = scenePickerOverlay.querySelector('.slide-picker__search');
+    searchInput.value = '';
+    setTimeout(function() { searchInput.focus(); }, 50);
+  }
+
+  var scenePickerSelectedIdx = 0;
+
+  function populateScenePickerList(scenes) {
+    var list = scenePickerOverlay.querySelector('.scene-picker__list');
+    list.innerHTML = '';
+    scenePickerSelectedIdx = 0;
+
+    if (scenes.length === 0) {
+      list.innerHTML = '<div class="scene-picker__empty">No scenes saved yet</div>';
+      return;
+    }
+
+    for (var i = 0; i < scenes.length; i++) {
+      var scene = scenes[i];
+      var item = document.createElement('div');
+      item.className = 'slide-picker__item scene-picker__item';
+      item.dataset.sceneName = scene.name;
+      item.dataset.sceneIndex = i;
+
+      var badge = scene.isAuthored ? '<span class="scene-picker__badge">authored</span>' : '';
+      var timestamp = scene.timestamp ? '<span class="scene-picker__time">' + new Date(scene.timestamp).toLocaleTimeString() + '</span>' : '';
+      item.innerHTML =
+        '<span class="scene-picker__name">' + escapeHtml(scene.name) + '</span>' +
+        badge +
+        '<span class="slide-picker__number">Slide ' + (scene.slideIndex + 1) + '</span>' +
+        timestamp +
+        (!scene.isAuthored ? '<button class="scene-picker__delete" title="Delete scene">✕</button>' : '');
+
+      // Click to restore
+      (function(sceneName) {
+        item.addEventListener('click', function(e) {
+          if (e.target.classList.contains('scene-picker__delete')) {
+            e.stopPropagation();
+            sendMessage({ type: 'deleteScene', payload: { sceneName: sceneName } });
+            // Remove the item from display
+            item.remove();
+            return;
+          }
+          hideScenePickerOverlay();
+          sendMessage({ type: 'restoreScene', payload: { sceneName: sceneName } });
+        });
+      })(scene.name);
+
+      list.appendChild(item);
+    }
+
+    highlightScenePickerItem(0);
+  }
+
+  function filterScenePickerList(query) {
+    var list = scenePickerOverlay.querySelector('.scene-picker__list');
+    var items = list.querySelectorAll('.scene-picker__item');
+    var lowerQuery = query.toLowerCase().trim();
+    var firstVisible = -1;
+
+    for (var i = 0; i < items.length; i++) {
+      var name = items[i].dataset.sceneName.toLowerCase();
+      var visible = !lowerQuery || name.indexOf(lowerQuery) >= 0;
+      items[i].style.display = visible ? '' : 'none';
+      if (visible && firstVisible === -1) {
+        firstVisible = i;
+      }
+    }
+
+    scenePickerSelectedIdx = firstVisible >= 0 ? firstVisible : 0;
+    highlightScenePickerItem(scenePickerSelectedIdx);
+  }
+
+  function highlightScenePickerItem(index) {
+    var list = scenePickerOverlay.querySelector('.scene-picker__list');
+    var items = list.querySelectorAll('.scene-picker__item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.toggle('slide-picker__item--selected', i === index);
+    }
+    if (items[index]) {
+      items[index].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function handleScenePickerKeydown(event) {
+    var list = scenePickerOverlay.querySelector('.scene-picker__list');
+    var items = Array.from(list.querySelectorAll('.scene-picker__item')).filter(function(item) {
+      return item.style.display !== 'none';
+    });
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        scenePickerSelectedIdx = Math.min(scenePickerSelectedIdx + 1, items.length - 1);
+        highlightVisibleSceneItem(items, scenePickerSelectedIdx);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        scenePickerSelectedIdx = Math.max(scenePickerSelectedIdx - 1, 0);
+        highlightVisibleSceneItem(items, scenePickerSelectedIdx);
+        break;
+      case 'Enter':
+        event.preventDefault();
+        if (items[scenePickerSelectedIdx]) {
+          var name = items[scenePickerSelectedIdx].dataset.sceneName;
+          hideScenePickerOverlay();
+          sendMessage({ type: 'restoreScene', payload: { sceneName: name } });
+        }
+        break;
+      case 'Escape':
+        event.preventDefault();
+        hideScenePickerOverlay();
+        break;
+    }
+  }
+
+  function highlightVisibleSceneItem(visibleItems, index) {
+    var list = scenePickerOverlay.querySelector('.scene-picker__list');
+    var allItems = list.querySelectorAll('.scene-picker__item');
+    for (var i = 0; i < allItems.length; i++) {
+      allItems[i].classList.remove('slide-picker__item--selected');
+    }
+    if (visibleItems[index]) {
+      visibleItems[index].classList.add('slide-picker__item--selected');
+      visibleItems[index].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function hideScenePickerOverlay() {
+    if (scenePickerOverlay) {
+      scenePickerOverlay.style.display = 'none';
+    }
+  }
+
+  // =========================================================================
+  // History Breadcrumb Trail (T040)
+  // =========================================================================
+
+  var breadcrumbTrail = null;
+
+  /**
+   * Update the breadcrumb trail with navigation history
+   */
+  function updateBreadcrumbTrail(navigationHistory, canGoBack, totalHistoryEntries) {
+    if (!navigationHistory || navigationHistory.length === 0) {
+      if (breadcrumbTrail) {
+        breadcrumbTrail.style.display = 'none';
+      }
+      return;
+    }
+
+    if (!breadcrumbTrail) {
+      breadcrumbTrail = document.createElement('div');
+      breadcrumbTrail.className = 'breadcrumb-trail';
+      breadcrumbTrail.setAttribute('role', 'navigation');
+      breadcrumbTrail.setAttribute('aria-label', 'Slide history');
+      document.body.appendChild(breadcrumbTrail);
+    }
+
+    breadcrumbTrail.style.display = '';
+
+    // Show up to 10 breadcrumbs (most recent last for left-to-right reading)
+    var crumbs = navigationHistory.slice().reverse(); // oldest → newest
+    var totalEntries = totalHistoryEntries || crumbs.length;
+    var hasMore = totalEntries > crumbs.length;
+    var visibleCrumbs = crumbs; // Already limited to 10 by conductor
+
+    var html = '';
+
+    if (hasMore) {
+      html += '<span class="breadcrumb-trail__more" title="' + totalEntries + ' total slides visited">…</span>';
+      html += '<span class="breadcrumb-trail__separator">›</span>';
+    }
+
+    for (var i = 0; i < visibleCrumbs.length; i++) {
+      var crumb = visibleCrumbs[i];
+      var label = crumb.slideTitle || ('Slide ' + (crumb.slideIndex + 1));
+      var methodIcon = getMethodIcon(crumb.method);
+
+      if (i > 0) {
+        html += '<span class="breadcrumb-trail__separator">›</span>';
+      }
+
+      html += '<button class="breadcrumb-trail__item" data-slide-index="' + crumb.slideIndex + '" title="' +
+        escapeHtml(label) + ' (' + crumb.method + ')">' +
+        methodIcon + ' ' + escapeHtml(label) + '</button>';
+    }
+
+    if (canGoBack) {
+      html += '<button class="breadcrumb-trail__back" title="Go back (Alt+Left)">⏎</button>';
+    }
+
+    breadcrumbTrail.innerHTML = html;
+
+    // Wire up click handlers
+    var items = breadcrumbTrail.querySelectorAll('.breadcrumb-trail__item');
+    for (var j = 0; j < items.length; j++) {
+      (function(item) {
+        item.addEventListener('click', function() {
+          var slideIndex = parseInt(item.dataset.slideIndex, 10);
+          sendMessage({ type: 'navigate', payload: { direction: 'goto', slideIndex: slideIndex } });
+        });
+      })(items[j]);
+    }
+
+    var backBtn = breadcrumbTrail.querySelector('.breadcrumb-trail__back');
+    if (backBtn) {
+      backBtn.addEventListener('click', function() {
+        sendMessage({ type: 'goBack' });
+      });
+    }
+  }
+
+  function getMethodIcon(method) {
+    switch (method) {
+      case 'sequential': return '→';
+      case 'jump': return '⤳';
+      case 'go-back': return '←';
+      case 'scene-restore': return '📌';
+      default: return '·';
+    }
   }
 
   /**

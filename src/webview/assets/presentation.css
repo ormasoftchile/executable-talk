@@ -1117,3 +1117,335 @@ html, body {
   color: var(--vscode-errorForeground, #f44747);
   opacity: 0.8;
 }
+
+/* =========================================================================
+   Slide Picker Overlay (T016)
+   ========================================================================= */
+
+.slide-picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 1000;
+  padding-top: 15vh;
+}
+
+.slide-picker {
+  background: var(--vscode-quickInput-background, #252526);
+  color: var(--vscode-quickInput-foreground, #cccccc);
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 6px;
+  box-shadow: 0 8px 30px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  width: 500px;
+  max-width: 90vw;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.slide-picker__header {
+  padding: 8px;
+  border-bottom: 1px solid var(--vscode-widget-border, #454545);
+}
+
+.slide-picker__search {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--vscode-input-background, #3c3c3c);
+  color: var(--vscode-input-foreground, #cccccc);
+  border: 1px solid var(--vscode-input-border, #3c3c3c);
+  border-radius: 4px;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.slide-picker__search:focus {
+  border-color: var(--vscode-focusBorder, #007fd4);
+}
+
+.slide-picker__list {
+  overflow-y: auto;
+  max-height: 50vh;
+  padding: 4px 0;
+}
+
+.slide-picker__item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  cursor: pointer;
+  gap: 12px;
+}
+
+.slide-picker__item:hover,
+.slide-picker__item--selected {
+  background: var(--vscode-list-hoverBackground, #2a2d2e);
+}
+
+.slide-picker__item--selected {
+  background: var(--vscode-list-activeSelectionBackground, #094771);
+  color: var(--vscode-list-activeSelectionForeground, #ffffff);
+}
+
+.slide-picker__item--current {
+  font-weight: bold;
+}
+
+.slide-picker__number {
+  min-width: 30px;
+  text-align: right;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.slide-picker__title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================================
+   Digit Indicator (T017)
+   ========================================================================= */
+
+.digit-indicator {
+  position: fixed;
+  bottom: 80px;
+  right: 30px;
+  background: var(--vscode-quickInput-background, #252526);
+  color: var(--vscode-quickInput-foreground, #cccccc);
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  padding: 8px 16px;
+  font-size: 28px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-weight: bold;
+  z-index: 999;
+  display: none;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* =========================================================================
+   Scene Name Input Overlay (T028/T030)
+   ========================================================================= */
+
+.scene-name-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.55);
+  display: none;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 22vh;
+  z-index: 1000;
+}
+
+.scene-name-dialog {
+  background: var(--vscode-quickInput-background, #252526);
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  width: 420px;
+  max-width: 90vw;
+  padding: 0;
+  overflow: hidden;
+}
+
+.scene-name-dialog__header {
+  padding: 12px 16px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vscode-quickInputTitle-background, var(--vscode-quickInput-foreground, #cccccc));
+}
+
+.scene-name-dialog__input {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 4px 16px 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--vscode-input-border, #3c3c3c);
+  border-radius: 4px;
+  background: var(--vscode-input-background, #3c3c3c);
+  color: var(--vscode-input-foreground, #cccccc);
+  font-size: 14px;
+  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  outline: none;
+}
+
+.scene-name-dialog__input:focus {
+  border-color: var(--vscode-focusBorder, #0e639c);
+}
+
+.scene-name-dialog__input::placeholder {
+  color: var(--vscode-input-placeholderForeground, #888);
+}
+
+.scene-name-dialog__hint {
+  padding: 4px 16px 12px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #888);
+}
+
+/* =========================================================================
+   Scene Picker Overlay (T029/T030)
+   Re-uses .slide-picker-overlay / .slide-picker base styles.
+   Only additions specific to scene items live here.
+   ========================================================================= */
+
+.scene-picker__list {
+  max-height: 340px;
+}
+
+.scene-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scene-picker__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.scene-picker__badge {
+  display: inline-block;
+  background: var(--vscode-badge-background, #4d4d4d);
+  color: var(--vscode-badge-foreground, #ffffff);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.scene-picker__time {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #888);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.scene-picker__delete {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--vscode-descriptionForeground, #888);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.scene-picker__item:hover .scene-picker__delete {
+  opacity: 1;
+}
+
+.scene-picker__delete:hover {
+  color: var(--error-color, #f44336);
+  background: rgba(244, 67, 54, 0.12);
+}
+
+.scene-picker__empty {
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground, #888);
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* =========================================================================
+   History Breadcrumb Trail (T040/T041)
+   ========================================================================= */
+
+.breadcrumb-trail {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--vscode-editorWidget-background, rgba(37, 37, 38, 0.85));
+  border: 1px solid var(--vscode-widget-border, #454545);
+  border-radius: 6px;
+  padding: 4px 8px;
+  z-index: 50;
+  max-width: 80vw;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  opacity: 0.4;
+  transition: opacity 0.25s ease;
+}
+
+.breadcrumb-trail:hover {
+  opacity: 1;
+}
+
+.breadcrumb-trail__item {
+  background: none;
+  border: none;
+  color: var(--vscode-breadcrumb-foreground, var(--vscode-descriptionForeground, #888));
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.breadcrumb-trail__item:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
+  color: var(--vscode-breadcrumb-focusForeground, var(--vscode-foreground, #cccccc));
+}
+
+.breadcrumb-trail__separator {
+  color: var(--vscode-breadcrumb-foreground, #888);
+  font-size: 11px;
+  opacity: 0.6;
+  user-select: none;
+}
+
+.breadcrumb-trail__more {
+  color: var(--vscode-descriptionForeground, #888);
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.breadcrumb-trail__back {
+  background: none;
+  border: none;
+  color: var(--vscode-descriptionForeground, #888);
+  font-size: 14px;
+  padding: 2px 6px;
+  margin-left: 4px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.breadcrumb-trail__back:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
+  color: var(--vscode-foreground, #cccccc);
+}

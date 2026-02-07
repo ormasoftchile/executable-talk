@@ -105,6 +105,29 @@ export function activate(context: vscode.ExtensionContext): void {
         }
     );
 
+    // T014: Go to slide command — opens slide picker in the Webview
+    const goToSlideDisposable = vscode.commands.registerCommand(
+        'executableTalk.goToSlide',
+        () => {
+            conductor?.openSlidePicker();
+        }
+    );
+
+    // T024/T025: Save/Restore scene commands — send messages to Webview
+    const saveSceneDisposable = vscode.commands.registerCommand(
+        'executableTalk.saveScene',
+        () => {
+            conductor?.requestSaveScene();
+        }
+    );
+
+    const restoreSceneDisposable = vscode.commands.registerCommand(
+        'executableTalk.restoreScene',
+        () => {
+            conductor?.requestRestoreScene();
+        }
+    );
+
     const validateDeckDisposable = vscode.commands.registerCommand(
         'executableTalk.validateDeck',
         async () => {
@@ -216,6 +239,9 @@ export function activate(context: vscode.ExtensionContext): void {
         nextSlideDisposable,
         previousSlideDisposable,
         openPresenterViewDisposable,
+        goToSlideDisposable,
+        saveSceneDisposable,
+        restoreSceneDisposable,
         validateDeckDisposable,
         completionDisposable,
         hoverDisposable,
