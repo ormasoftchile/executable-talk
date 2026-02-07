@@ -114,7 +114,7 @@ function parseAuthoredScenes(
   const namesSeen = new Set<string>();
 
   for (let i = 0; i < rawScenes.length; i++) {
-    const entry = rawScenes[i];
+    const entry: unknown = rawScenes[i];
 
     if (!entry || typeof entry !== 'object') {
       errors.push(`scenes[${i}]: must be an object with name and slide`);
