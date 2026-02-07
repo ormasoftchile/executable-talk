@@ -13,6 +13,23 @@ import {
 } from '../models/snapshot';
 
 /**
+ * A resource that could not be restored during partial restore
+ */
+export interface SkippedResource {
+  type: 'editor' | 'terminal' | 'decoration';
+  name: string;
+  reason: string;
+}
+
+/**
+ * Result of a partial restore operation
+ */
+export interface RestoreResult {
+  success: boolean;
+  skipped: SkippedResource[];
+}
+
+/**
  * Tracks which resources were created by the presentation
  */
 interface PresentationResources {
@@ -75,6 +92,92 @@ export class SnapshotFactory {
   }
 
   /**
+   * Restore a snapshot partially, collecting skipped resources instead of failing.
+   * Used by scene restore where best-effort is acceptable.
+   * Per contracts/scene-store.md.
+   * @param snapshot State to restore
+   */
+  async restorePartial(snapshot: Snapshot): Promise<RestoreResult> {
+    const skipped: SkippedResource[] = [];
+
+    // Restore editor states (best-effort)
+    for (const editorState of snapshot.openEditors) {
+      try {
+        const editor = vscode.window.visibleTextEditors.find(e =>
+          vscode.workspace.asRelativePath(e.document.uri) === editorState.path
+        );
+        if (editor) {
+          if (editorState.visibleRange) {
+            const range = new vscode.Range(
+              new vscode.Position(editorState.visibleRange.start - 1, 0),
+              new vscode.Position(editorState.visibleRange.end - 1, 0)
+            );
+            editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+          }
+          if (editorState.cursorPosition) {
+            const pos = new vscode.Position(
+              editorState.cursorPosition.line,
+              editorState.cursorPosition.character
+            );
+            editor.selection = new vscode.Selection(pos, pos);
+          }
+        } else {
+          // Try to open the file
+          const workspaceFolders = vscode.workspace.workspaceFolders;
+          if (workspaceFolders) {
+            const fileUri = vscode.Uri.joinPath(workspaceFolders[0].uri, editorState.path);
+            try {
+              await vscode.window.showTextDocument(fileUri, {
+                viewColumn: editorState.viewColumn,
+                preserveFocus: true,
+              });
+            } catch {
+              skipped.push({
+                type: 'editor',
+                name: editorState.path,
+                reason: 'File not found or could not be opened',
+              });
+            }
+          }
+        }
+      } catch {
+        skipped.push({
+          type: 'editor',
+          name: editorState.path,
+          reason: 'Failed to restore editor state',
+        });
+      }
+    }
+
+    // Restore decorations (best-effort)
+    try {
+      this.restoreDecorations(snapshot.decorations);
+    } catch {
+      skipped.push({
+        type: 'decoration',
+        name: 'all',
+        reason: 'Failed to restore decorations',
+      });
+    }
+
+    // Restore terminals (best-effort)
+    try {
+      this.restoreTerminalStates(snapshot.terminals);
+    } catch {
+      skipped.push({
+        type: 'terminal',
+        name: 'all',
+        reason: 'Failed to restore terminal states',
+      });
+    }
+
+    return {
+      success: skipped.length === 0,
+      skipped,
+    };
+  }
+
+  /**
    * Track a file opened by the presentation
    */
   trackOpenedEditor(filePath: string): void {
@@ -128,15 +231,22 @@ export class SnapshotFactory {
         if (tab.input instanceof vscode.TabInputText) {
           const uri = tab.input.uri;
           
-          // Get visible range if editor is open
+          // Get visible range and cursor position if editor is open
           let visibleRange: { start: number; end: number } | undefined;
+          let cursorPosition: { line: number; character: number } | undefined;
           const editor = vscode.window.visibleTextEditors.find(
             e => e.document.uri.toString() === uri.toString()
           );
-          if (editor && editor.visibleRanges.length > 0) {
-            visibleRange = {
-              start: editor.visibleRanges[0].start.line + 1,
-              end: editor.visibleRanges[0].end.line + 1,
+          if (editor) {
+            if (editor.visibleRanges.length > 0) {
+              visibleRange = {
+                start: editor.visibleRanges[0].start.line + 1,
+                end: editor.visibleRanges[0].end.line + 1,
+              };
+            }
+            cursorPosition = {
+              line: editor.selection.active.line,
+              character: editor.selection.active.character,
             };
           }
 
@@ -145,6 +255,7 @@ export class SnapshotFactory {
             viewColumn: tabGroup.viewColumn,
             wasOpenedByPresentation: this.resources.openedEditors.has(uri.fsPath),
             visibleRange,
+            cursorPosition,
           });
         }
       }
@@ -196,18 +307,25 @@ export class SnapshotFactory {
       }
     }
     
-    // Restore visible ranges for editors that were in the snapshot
+    // Restore visible ranges and cursor positions for editors that were in the snapshot
     for (const editorState of editors) {
-      if (editorState.visibleRange) {
-        const editor = vscode.window.visibleTextEditors.find(e => 
-          vscode.workspace.asRelativePath(e.document.uri) === editorState.path
-        );
-        if (editor) {
+      const editor = vscode.window.visibleTextEditors.find(e => 
+        vscode.workspace.asRelativePath(e.document.uri) === editorState.path
+      );
+      if (editor) {
+        if (editorState.visibleRange) {
           const range = new vscode.Range(
             new vscode.Position(editorState.visibleRange.start - 1, 0),
             new vscode.Position(editorState.visibleRange.end - 1, 0)
           );
           editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+        }
+        if (editorState.cursorPosition) {
+          const pos = new vscode.Position(
+            editorState.cursorPosition.line,
+            editorState.cursorPosition.character
+          );
+          editor.selection = new vscode.Selection(pos, pos);
         }
       }
     }

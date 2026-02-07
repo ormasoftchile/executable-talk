@@ -54,6 +54,12 @@ export class ActionCompletionProvider {
     _token: unknown,
     _context: unknown,
   ): CompletionItem[] | null {
+    // Check if cursor is inside frontmatter scenes block
+    const frontmatterItems = this.provideScenesCompletions(document, position);
+    if (frontmatterItems) {
+      return frontmatterItems;
+    }
+
     // Find action blocks in the document
     const blocks = findActionBlocks(document);
 
@@ -316,6 +322,110 @@ export class ActionCompletionProvider {
         return block;
       }
     }
+    return null;
+  }
+
+  /**
+   * Find the frontmatter region (between first and second ---).
+   * Returns [startLine, endLine] (both 0-based, inclusive of --- lines) or null.
+   */
+  private findFrontmatter(document: { lineCount: number; lineAt(line: number): { text: string } }): [number, number] | null {
+    if (document.lineCount < 3) {
+      return null;
+    }
+    // First line must be ---
+    if (document.lineAt(0).text.trim() !== '---') {
+      return null;
+    }
+    for (let i = 1; i < document.lineCount; i++) {
+      if (document.lineAt(i).text.trim() === '---') {
+        return [0, i];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Provide completion items when cursor is inside a scenes: block in frontmatter.
+   * Suggests scene item properties (name, slide) for scenes array items.
+   */
+  private provideScenesCompletions(
+    document: { lineCount: number; lineAt(line: number): { text: string }; getText(): string },
+    position: { line: number; character: number },
+  ): CompletionItem[] | null {
+    const fm = this.findFrontmatter(document);
+    if (!fm) {
+      return null;
+    }
+    const [fmStart, fmEnd] = fm;
+    // Cursor must be inside frontmatter
+    if (position.line <= fmStart || position.line >= fmEnd) {
+      return null;
+    }
+
+    // Find if there's a scenes: line above the cursor
+    let scenesLineIdx = -1;
+    for (let i = position.line; i > fmStart; i--) {
+      if (/^scenes:\s*$/.test(document.lineAt(i).text)) {
+        scenesLineIdx = i;
+        break;
+      }
+      // If we hit a non-indented key (not a list item continuation), stop
+      if (i < position.line && /^\S/.test(document.lineAt(i).text) && !/^\s*-\s/.test(document.lineAt(i).text)) {
+        break;
+      }
+    }
+
+    if (scenesLineIdx < 0) {
+      return null;
+    }
+
+    const currentLine = document.lineAt(position.line).text;
+
+    // If cursor is on a "  - " line (list item start), suggest name/slide
+    // Also if on a continuation line inside a list item
+    if (/^\s+-\s*/.test(currentLine) || /^\s+\w/.test(currentLine)) {
+      // Detect which properties are already set in this item
+      const existingKeys = new Set<string>();
+      // Scan backward to the "  - " marker for this item
+      for (let i = position.line; i > scenesLineIdx; i--) {
+        const lineText = document.lineAt(i).text;
+        const keyMatch = lineText.match(/^\s+-?\s*(\w+):/);
+        if (keyMatch) {
+          existingKeys.add(keyMatch[1]);
+        }
+        if (/^\s+-\s/.test(lineText) && i < position.line) {
+          break; // Previous item boundary
+        }
+      }
+
+      const items: CompletionItem[] = [];
+
+      if (!existingKeys.has('name')) {
+        items.push({
+          label: 'name',
+          kind: CompletionKind.Property,
+          detail: 'string (required)',
+          documentation: 'Unique name for the scene anchor. Used as the label in the scene picker.',
+          insertText: 'name: ',
+          sortText: '0_name',
+        });
+      }
+
+      if (!existingKeys.has('slide')) {
+        items.push({
+          label: 'slide',
+          kind: CompletionKind.Property,
+          detail: 'number (required)',
+          documentation: 'The 1-based slide number this scene anchors to. Must be within the deck slide range.',
+          insertText: 'slide: ',
+          sortText: '0_slide',
+        });
+      }
+
+      return items.length > 0 ? items : null;
+    }
+
     return null;
   }
 }

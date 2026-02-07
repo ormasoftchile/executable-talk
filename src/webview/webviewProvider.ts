@@ -14,6 +14,14 @@ import {
   NavigateMessage,
   ExecuteActionMessage,
   VscodeCommandMessage,
+  GoBackMessage,
+  SaveSceneMessage,
+  RestoreSceneMessage,
+  DeleteSceneMessage,
+  OpenSlidePickerPayload,
+  OpenScenePickerPayload,
+  SceneChangedPayload,
+  WarningPayload,
 } from './messages';
 import { isWebviewMessage, createMessageDispatcher, MessageHandlers } from './messageHandler';
 import { Deck } from '../models/deck';
@@ -32,6 +40,10 @@ export interface WebviewCallbacks {
   onClose(): void;
   onReady(): void;
   onVscodeCommand?(commandId: string, args?: unknown[]): void;
+  onGoBack?(): void;
+  onSaveScene?(sceneName: string): void;
+  onRestoreScene?(sceneName: string): void;
+  onDeleteScene?(sceneName: string): void;
 }
 
 /**
@@ -188,6 +200,46 @@ export class WebviewProvider implements vscode.Disposable {
   }
 
   /**
+   * Send open slide picker command to webview.
+   * Per contracts/navigation-protocol.md.
+   */
+  sendOpenSlidePicker(payload: OpenSlidePickerPayload): void {
+    this.postMessage({ type: 'openSlidePicker', payload });
+  }
+
+  /**
+   * Send open scene picker command to webview.
+   * Per contracts/scene-store.md.
+   */
+  sendOpenScenePicker(payload: OpenScenePickerPayload): void {
+    this.postMessage({ type: 'openScenePicker', payload });
+  }
+
+  /**
+   * Send open scene name input command to webview.
+   * Per contracts/scene-store.md.
+   */
+  sendOpenSceneNameInput(): void {
+    this.postMessage({ type: 'openSceneNameInput', payload: {} });
+  }
+
+  /**
+   * Send scene changed notification to webview.
+   * Per contracts/scene-store.md.
+   */
+  sendSceneChanged(payload: SceneChangedPayload): void {
+    this.postMessage({ type: 'sceneChanged', payload });
+  }
+
+  /**
+   * Send warning notification to webview.
+   * Per contracts/navigation-protocol.md.
+   */
+  sendWarning(payload: WarningPayload): void {
+    this.postMessage({ type: 'warning', payload });
+  }
+
+  /**
    * Check if panel is visible
    */
   isVisible(): boolean {
@@ -247,6 +299,18 @@ export class WebviewProvider implements vscode.Disposable {
       },
       onVscodeCommand: (msg: VscodeCommandMessage) => {
         this.callbacks?.onVscodeCommand?.(msg.payload.commandId, msg.payload.args);
+      },
+      onGoBack: (_msg: GoBackMessage) => {
+        this.callbacks?.onGoBack?.();
+      },
+      onSaveScene: (msg: SaveSceneMessage) => {
+        this.callbacks?.onSaveScene?.(msg.payload.sceneName);
+      },
+      onRestoreScene: (msg: RestoreSceneMessage) => {
+        this.callbacks?.onRestoreScene?.(msg.payload.sceneName);
+      },
+      onDeleteScene: (msg: DeleteSceneMessage) => {
+        this.callbacks?.onDeleteScene?.(msg.payload.sceneName);
       },
     };
 
@@ -380,7 +444,7 @@ export class WebviewProvider implements vscode.Disposable {
       <button id="btn-last" title="Last slide (End)">⏭</button>
     </nav>
     ${toolbarConfig}
-    <div id="action-overlay" class="hidden">
+    <div id="action-overlay" class="hidden" role="alert" aria-live="assertive">
       <div id="action-status"></div>
     </div>
   </div>

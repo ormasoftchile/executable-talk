@@ -9,6 +9,11 @@ Transform your Markdown presentations into live coding demonstrations with VS Co
 - **Execute Actions**: Click on action links to open files, highlight code, run terminal commands, or start debug sessions
 - **Dynamic Content**: Embed live file contents, command output, and git diffs directly in your slides
 - **Undo/Redo**: Recover from demo failures by undoing IDE changes with `Cmd+Z` / `Ctrl+Z`
+- **Non-Linear Navigation**: Jump to any slide instantly via slide picker (`Ctrl+G`), digit keys, or go back (`Alt+Left`)
+- **Scene Checkpoints**: Save and restore full IDE state as named scenes (`Ctrl+S` / `Ctrl+R`)
+- **Cross-Platform Commands**: Write terminal commands that adapt to macOS, Windows, and Linux automatically
+- **Navigation History**: Breadcrumb trail of visited slides for quick retracing
+- **Syntax Highlighting**: Full Markdown highlighting in `.deck.md` files with YAML coloring inside `action` blocks
 - **Zen Mode**: Presentations automatically enter distraction-free Zen Mode
 - **Presenter View**: Open speaker notes and next slide preview on a secondary panel
 - **Workspace Trust**: Actions that execute code require Workspace Trust for security
@@ -83,7 +88,14 @@ Start a debug session:
 | `End` | Last slide |
 | `Cmd+Z` / `Ctrl+Z` | Undo IDE changes |
 | `Cmd+Shift+Z` / `Ctrl+Y` | Redo IDE changes |
+| `Ctrl+G` / `Cmd+G` | Open slide picker (jump to any slide) |
+| `Ctrl+S` / `Cmd+S` | Save current state as a named scene |
+| `Ctrl+R` / `Cmd+R` | Restore a saved scene |
+| `Alt+Left` | Go back to previously viewed slide |
+| Digit keys + `Enter` | Jump to slide by number |
 | `Escape` | Exit presentation |
+
+> **Note**: `Ctrl+G`, `Ctrl+S`, and `Ctrl+R` are scoped to the presentation Webview — they don't affect VS Code's native shortcuts outside the presentation.
 
 ### Floating Toolbar
 
@@ -106,6 +118,9 @@ A floating toolbar appears in the bottom-right corner when you hover over the pr
 | `Executable Talk: Reset Presentation` | Reset to the first slide and clear all changes |
 | `Executable Talk: Next Slide` | Navigate to the next slide |
 | `Executable Talk: Previous Slide` | Navigate to the previous slide |
+| `Executable Talk: Go to Slide` | Open the slide picker to jump to any slide |
+| `Executable Talk: Save Scene` | Save current IDE state as a named scene |
+| `Executable Talk: Restore Scene` | Open the scene picker to restore a saved scene |
 | `Executable Talk: Open Presenter View` | Show speaker notes and next slide preview |
 | `Executable Talk: Validate Deck` | Run preflight checks on the current `.deck.md` file |
 
@@ -288,9 +303,117 @@ Toasts auto-dismiss after 8 seconds for simple failures. Sequence failures and t
 
 When editing `.deck.md` files, you get full IDE support inside action blocks:
 
+- **Syntax highlighting**: Full Markdown highlighting with YAML syntax coloring inside ` ```action ` fenced code blocks
 - **Autocomplete**: Type suggestions after `type:`, parameter suggestions scoped to the selected action type, triggered by `:` and `/`
 - **Hover documentation**: Hover on action type keywords to see descriptions and parameter tables. Hover on parameter names for type info and allowed values.
 - **Real-time diagnostics**: Squiggly underlines for unknown action types (error), missing required parameters (error), unknown parameter keys (warning), and invalid YAML syntax (error)
+
+## Non-Linear Navigation
+
+During Q&A or ad-hoc discussion, jump to any slide instantly without sequential clicking.
+
+### Slide Picker
+
+Press `Ctrl+G` / `Cmd+G` to open a searchable slide picker overlay:
+
+- **Search by title** — type to filter slides in real time
+- **Jump by number** — type a number and press Enter
+- **Keyboard navigation** — Arrow keys to select, Enter to confirm, Escape to dismiss
+
+### Jump by Number
+
+From the presentation, type digit keys (e.g., `1`, `5`) and press `Enter` to jump directly to that slide number. Press `Escape` to clear.
+
+### Go Back
+
+Press `Alt+Left` to return to the previously viewed slide (not the sequentially previous one). This uses a navigation history stack separate from undo/redo.
+
+### Navigation History Trail
+
+A breadcrumb trail appears at the bottom of the presentation showing your recent slide visits:
+
+- Click any breadcrumb to jump back to that slide
+- Icons show how you reached each slide: → sequential, ⤳ jump, ← go-back, 📌 scene restore
+- Up to 10 recent entries are shown; the trail fades in on hover
+
+## Scene Checkpoints
+
+Save and restore complete IDE state at any point during your presentation.
+
+### Save a Scene
+
+1. Press `Ctrl+S` / `Cmd+S` during a presentation
+2. Enter a name (e.g., "demo-start")
+3. The current IDE state is captured: open files, cursor positions, terminals, and active slide
+
+### Restore a Scene
+
+1. Press `Ctrl+R` / `Cmd+R` to open the scene picker
+2. Select a scene to restore
+3. The IDE returns to the exact state when the scene was saved
+
+### Pre-Authored Scenes
+
+Define scene anchors in your deck's YAML frontmatter:
+
+```yaml
+---
+title: My Presentation
+scenes:
+  - name: intro
+    slide: 1
+  - name: live-demo
+    slide: 8
+  - name: wrap-up
+    slide: 15
+---
+```
+
+Pre-authored scenes appear in the scene picker automatically when the presentation opens. They're labeled "authored" and navigate to the anchored slide (without capturing full IDE state).
+
+### Scene Limits
+
+- Up to **20** runtime-saved scenes per session
+- Pre-authored scenes from frontmatter don't count against this limit
+- Overwriting an existing scene (same name) doesn't count against the limit
+- Pre-authored scenes are read-only and cannot be deleted
+
+## Cross-Platform Commands
+
+Write terminal commands that work on every operating system.
+
+### Platform Command Map
+
+Instead of a string, provide an object with per-OS variants:
+
+````markdown
+```action
+type: terminal.run
+command:
+  macos: open .
+  windows: explorer .
+  linux: xdg-open .
+  default: xdg-open .
+label: Open File Browser
+```
+````
+
+The correct command runs automatically based on the presenter's OS. If no specific entry matches, the `default` fallback is used.
+
+### Path Placeholders
+
+Use platform-aware placeholders in any terminal command:
+
+| Placeholder | macOS/Linux | Windows |
+|-------------|-------------|---------|
+| `${pathSep}` | `/` | `\` |
+| `${home}` | `/Users/you` | `C:\Users\you` |
+| `${shell}` | `/bin/zsh` | `cmd.exe` |
+| `${pathDelimiter}` | `:` | `;` |
+
+### Preflight Platform Validation
+
+Run **Executable Talk: Validate Deck** to check cross-platform coverage. The validator warns if any `terminal.run` action with a platform command map doesn't cover the current OS and has no `default` fallback.
 
 ## Dynamic Content Rendering (Render Directives)
 

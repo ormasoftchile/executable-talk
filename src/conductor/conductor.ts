@@ -8,6 +8,8 @@ import { Slide } from '../models/slide';
 import { Action, ActionType } from '../models/action';
 import { StateStack } from './stateStack';
 import { SnapshotFactory } from './snapshotFactory';
+import { NavigationHistory } from './navigationHistory';
+import { SceneStore } from './sceneStore';
 import { WebviewProvider, WebviewCallbacks } from '../webview/webviewProvider';
 import { PresenterViewProvider } from '../webview/presenterViewProvider';
 import { getActionRegistry } from '../actions/registry';
@@ -31,6 +33,8 @@ export class Conductor implements vscode.Disposable {
   private currentSlideIndex = 0;
   private stateStack: StateStack;
   private snapshotFactory: SnapshotFactory;
+  private navigationHistory: NavigationHistory;
+  private sceneStore: SceneStore;
   private webviewProvider: WebviewProvider;
   private presenterViewProvider: PresenterViewProvider;
   private disposables: vscode.Disposable[] = [];
@@ -42,6 +46,8 @@ export class Conductor implements vscode.Disposable {
   constructor(extensionUri: vscode.Uri) {
     this.stateStack = new StateStack();
     this.snapshotFactory = new SnapshotFactory();
+    this.navigationHistory = new NavigationHistory();
+    this.sceneStore = new SceneStore();
     this.webviewProvider = new WebviewProvider(extensionUri);
     this.presenterViewProvider = new PresenterViewProvider(extensionUri);
 
@@ -72,6 +78,11 @@ export class Conductor implements vscode.Disposable {
     this.deck.state = 'loading';
     this.currentSlideIndex = 0;
 
+    // Load authored scenes from deck frontmatter (T044 [US5])
+    if (deck.metadata?.scenes && deck.metadata.scenes.length > 0) {
+      this.sceneStore.loadAuthored(deck.metadata.scenes);
+    }
+
     // Render slides
     this.renderSlides();
 
@@ -100,6 +111,10 @@ export class Conductor implements vscode.Disposable {
       onClose: () => void this.close(),
       onReady: () => this.handleReady(),
       onVscodeCommand: (commandId, args) => void this.handleVscodeCommand(commandId, args),
+      onGoBack: () => this.handleGoBack(),
+      onSaveScene: (sceneName) => void this.handleSaveScene(sceneName),
+      onRestoreScene: (sceneName) => void this.handleRestoreScene(sceneName),
+      onDeleteScene: (sceneName) => this.handleDeleteScene(sceneName),
     };
 
     // Show presentation
@@ -141,6 +156,9 @@ export class Conductor implements vscode.Disposable {
       canRedo: this.stateStack.canRedo(),
       showAllFragments,
       fragmentCount: slide.fragmentCount,
+      navigationHistory: this.navigationHistory.getRecent(10),
+      canGoBack: this.navigationHistory.canGoBack(),
+      totalHistoryEntries: this.navigationHistory.length,
     });
 
     // Sync presenter view if visible
@@ -156,6 +174,11 @@ export class Conductor implements vscode.Disposable {
    * Navigate to next slide
    */
   async nextSlide(): Promise<void> {
+    if (this.deck && this.currentSlideIndex < this.deck.slides.length - 1) {
+      const targetIndex = this.currentSlideIndex + 1;
+      const title = this.deck.slides[targetIndex]?.frontmatter?.title;
+      this.navigationHistory.push(targetIndex, 'sequential', title);
+    }
     await this.goToSlide(this.currentSlideIndex + 1);
   }
 
@@ -163,6 +186,11 @@ export class Conductor implements vscode.Disposable {
    * Navigate to previous slide
    */
   async previousSlide(showAllFragments?: boolean): Promise<void> {
+    if (this.deck && this.currentSlideIndex > 0) {
+      const targetIndex = this.currentSlideIndex - 1;
+      const title = this.deck.slides[targetIndex]?.frontmatter?.title;
+      this.navigationHistory.push(targetIndex, 'sequential', title);
+    }
     await this.goToSlide(this.currentSlideIndex - 1, showAllFragments);
   }
 
@@ -170,6 +198,10 @@ export class Conductor implements vscode.Disposable {
    * Navigate to first slide
    */
   async firstSlide(): Promise<void> {
+    if (this.deck) {
+      const title = this.deck.slides[0]?.frontmatter?.title;
+      this.navigationHistory.push(0, 'sequential', title);
+    }
     await this.goToSlide(0);
   }
 
@@ -178,7 +210,10 @@ export class Conductor implements vscode.Disposable {
    */
   async lastSlide(): Promise<void> {
     if (this.deck) {
-      await this.goToSlide(this.deck.slides.length - 1);
+      const lastIndex = this.deck.slides.length - 1;
+      const title = this.deck.slides[lastIndex]?.frontmatter?.title;
+      this.navigationHistory.push(lastIndex, 'sequential', title);
+      await this.goToSlide(lastIndex);
     }
   }
 
@@ -205,6 +240,9 @@ export class Conductor implements vscode.Disposable {
           slideHtml: resolvedHtml,
           canUndo: this.stateStack.canUndo(),
           canRedo: this.stateStack.canRedo(),
+          navigationHistory: this.navigationHistory.getRecent(10),
+          canGoBack: this.navigationHistory.canGoBack(),
+          totalHistoryEntries: this.navigationHistory.length,
         });
       }
     }
@@ -407,6 +445,8 @@ export class Conductor implements vscode.Disposable {
     this.stateStack.clear();
     this.snapshotFactory.disposeDecorations();
     this.snapshotFactory.clearTracking();
+    this.navigationHistory.clear();
+    this.sceneStore.clear();
 
     // Go back to first slide
     if (this.deck) {
@@ -414,6 +454,54 @@ export class Conductor implements vscode.Disposable {
       this.deck.currentSlideIndex = 0;
       await this.goToSlide(0);
     }
+  }
+
+  /**
+   * Open the slide picker overlay in the Webview.
+   * Per contracts/navigation-protocol.md — sends slide list to Webview.
+   * Called by executableTalk.goToSlide command (T014).
+   */
+  openSlidePicker(): void {
+    if (!this.deck) {
+      return;
+    }
+
+    const slides = this.deck.slides.map((slide, i) => ({
+      index: i,
+      title: slide.frontmatter?.title ?? `Slide ${i + 1}`,
+    }));
+
+    this.webviewProvider.sendOpenSlidePicker({
+      slides,
+      currentIndex: this.currentSlideIndex,
+    });
+  }
+
+  /**
+   * Request the Webview to show the scene name input dialog.
+   * Per contracts/scene-store.md — called by Ctrl+S keybinding (T024).
+   */
+  requestSaveScene(): void {
+    if (!this.deck) {
+      return;
+    }
+    this.webviewProvider.sendOpenSceneNameInput();
+  }
+
+  /**
+   * Request the Webview to show the scene picker for restore.
+   * Per contracts/scene-store.md — called by Ctrl+R keybinding (T025).
+   */
+  requestRestoreScene(): void {
+    if (!this.deck) {
+      return;
+    }
+    const scenes = this.sceneStore.list().map(e => ({
+      name: e.name,
+      slideIndex: e.slideIndex,
+      isAuthored: e.origin === 'authored',
+    }));
+    this.webviewProvider.sendOpenScenePicker({ scenes });
   }
 
   /**
@@ -438,7 +526,7 @@ export class Conductor implements vscode.Disposable {
   // Private methods
   // ============================================================================
 
-  private handleNavigate(direction: 'next' | 'previous' | 'first' | 'last', _slideIndex?: number, showAllFragments?: boolean): void {
+  private handleNavigate(direction: 'next' | 'previous' | 'first' | 'last' | 'goto', slideIndex?: number, showAllFragments?: boolean): void {
     switch (direction) {
       case 'next':
         void this.nextSlide();
@@ -452,7 +540,174 @@ export class Conductor implements vscode.Disposable {
       case 'last':
         void this.lastSlide();
         break;
+      case 'goto':
+        if (slideIndex !== undefined) {
+          void this.handleGoto(slideIndex);
+        }
+        break;
     }
+  }
+
+  /**
+   * Handle goto navigation — jump to a specific slide by index.
+   * Validates range, records history, captures snapshot, navigates.
+   * Per contracts/navigation-protocol.md.
+   */
+  private async handleGoto(slideIndex: number): Promise<void> {
+    if (!this.deck) {
+      return;
+    }
+
+    // Validate slide index
+    if (slideIndex < 0 || slideIndex >= this.deck.slides.length) {
+      this.webviewProvider.sendError({
+        code: 'INVALID_SLIDE_INDEX',
+        message: `Slide index ${slideIndex} is out of range (0-${this.deck.slides.length - 1})`,
+        recoverable: true,
+      });
+      return;
+    }
+
+    // Record where we came from in navigation history
+    const currentSlide = this.deck.slides[this.currentSlideIndex];
+    this.navigationHistory.push(
+      this.currentSlideIndex,
+      'jump',
+      currentSlide?.frontmatter?.title
+    );
+
+    // Navigate
+    await this.goToSlide(slideIndex);
+  }
+
+  /**
+   * Handle goBack navigation — return to the previously visited slide.
+   * Per contracts/navigation-protocol.md.
+   */
+  private handleGoBack(): void {
+    const previousSlideIndex = this.navigationHistory.goBack();
+    if (previousSlideIndex !== null) {
+      void this.goToSlide(previousSlideIndex);
+    } else {
+      this.webviewProvider.sendWarning({
+        code: 'NO_HISTORY',
+        message: 'No navigation history to go back to',
+      });
+    }
+  }
+
+  /**
+   * Handle saveScene message — save current IDE state as a named scene.
+   * Per contracts/scene-store.md Save Flow (T026).
+   */
+  private async handleSaveScene(sceneName: string): Promise<void> {
+    if (!this.deck) {
+      return;
+    }
+
+    try {
+      const snapshot = this.snapshotFactory.capture(this.currentSlideIndex, `Scene: ${sceneName}`);
+      this.sceneStore.save(sceneName, snapshot, this.currentSlideIndex);
+
+      // Notify Webview of updated scene list
+      this.sendSceneChanged(sceneName);
+      this.outputChannel.appendLine(`[Conductor] Scene "${sceneName}" saved at slide ${this.currentSlideIndex + 1}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save scene';
+      this.webviewProvider.sendError({
+        code: 'SCENE_SAVE_FAILED',
+        message,
+        recoverable: true,
+      });
+    }
+  }
+
+  /**
+   * Handle restoreScene message — restore a previously saved scene.
+   * Per contracts/scene-store.md Restore Flow (T027).
+   */
+  private async handleRestoreScene(sceneName: string): Promise<void> {
+    if (!this.deck) {
+      return;
+    }
+
+    const entry = this.sceneStore.restore(sceneName);
+    if (!entry) {
+      this.webviewProvider.sendError({
+        code: 'SCENE_NOT_FOUND',
+        message: `Scene "${sceneName}" not found`,
+        recoverable: true,
+      });
+      return;
+    }
+
+    // Capture pre-restore snapshot (enables undo of restore)
+    const preRestoreSnapshot = this.snapshotFactory.capture(this.currentSlideIndex, `Before restore: ${sceneName}`);
+    this.stateStack.push(preRestoreSnapshot);
+
+    // Restore IDE state from snapshot
+    if (entry.snapshot) {
+      const result = await this.snapshotFactory.restorePartial(entry.snapshot);
+      if (!result.success && result.skipped.length > 0) {
+        this.webviewProvider.sendWarning({
+          code: 'PARTIAL_RESTORE',
+          message: `${result.skipped.length} resource(s) could not be restored`,
+        });
+      }
+    }
+
+    // Navigate to the scene's slide
+    this.navigationHistory.push(
+      this.currentSlideIndex,
+      'scene-restore',
+      this.deck.slides[this.currentSlideIndex]?.frontmatter?.title
+    );
+    await this.goToSlide(entry.slideIndex);
+
+    // Notify Webview
+    this.sendSceneChanged(sceneName);
+    this.outputChannel.appendLine(`[Conductor] Scene "${sceneName}" restored to slide ${entry.slideIndex + 1}`);
+  }
+
+  /**
+   * Handle deleteScene message — delete a runtime scene.
+   * Per contracts/scene-store.md (T027a).
+   */
+  private handleDeleteScene(sceneName: string): void {
+    try {
+      const deleted = this.sceneStore.delete(sceneName);
+      if (!deleted) {
+        this.webviewProvider.sendError({
+          code: 'SCENE_NOT_FOUND',
+          message: `Scene "${sceneName}" not found`,
+          recoverable: true,
+        });
+        return;
+      }
+
+      this.sendSceneChanged();
+      this.outputChannel.appendLine(`[Conductor] Scene "${sceneName}" deleted`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete scene';
+      this.webviewProvider.sendError({
+        code: 'SCENE_DELETE_FAILED',
+        message,
+        recoverable: true,
+      });
+    }
+  }
+
+  /**
+   * Send sceneChanged message to Webview with current scene list.
+   */
+  private sendSceneChanged(activeSceneName?: string): void {
+    const scenes = this.sceneStore.list().map(e => ({
+      name: e.name,
+      slideIndex: e.slideIndex,
+      isAuthored: e.origin === 'authored',
+      timestamp: e.timestamp,
+    }));
+    this.webviewProvider.sendSceneChanged({ scenes, activeSceneName });
   }
 
   private async handleExecuteAction(actionId: string): Promise<void> {
