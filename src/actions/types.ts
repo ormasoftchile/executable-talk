@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { Action, ActionType } from '../models/action';
+import { SequenceErrorDetail } from './errors';
 
 /**
  * Context provided to all action executors
@@ -38,6 +39,12 @@ export interface ExecutionResult {
   undo?: () => Promise<void>;
   /** Duration in milliseconds */
   durationMs: number;
+  /** Action type that produced this result (populated on failure, per T028) */
+  actionType?: ActionType;
+  /** Primary target of the action (path, command, config name) */
+  actionTarget?: string;
+  /** Structured sequence failure detail (per T029) */
+  sequenceDetail?: SequenceErrorDetail;
 }
 
 /**

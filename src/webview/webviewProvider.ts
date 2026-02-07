@@ -17,6 +17,9 @@ import {
 } from './messages';
 import { isWebviewMessage, createMessageDispatcher, MessageHandlers } from './messageHandler';
 import { Deck } from '../models/deck';
+import { ActionType } from '../models/action';
+import { renderBlockElements } from '../renderer/blockElementRenderer';
+import { SequenceErrorDetail } from '../actions/errors';
 
 /**
  * Callback interface for webview events
@@ -149,13 +152,25 @@ export class WebviewProvider implements vscode.Disposable {
   /**
    * Send action status changed message to webview
    */
-  sendActionStatusChanged(actionId: string, status: 'running' | 'success' | 'failed', error?: string): void {
+  sendActionStatusChanged(
+    actionId: string,
+    status: 'running' | 'success' | 'failed',
+    error?: string,
+    detail?: {
+      actionType?: ActionType;
+      actionTarget?: string;
+      sequenceDetail?: SequenceErrorDetail;
+    }
+  ): void {
     this.postMessage({
       type: 'actionStatusChanged',
       payload: {
         actionId,
         status,
         error,
+        ...(detail?.actionType && { actionType: detail.actionType }),
+        ...(detail?.actionTarget && { actionTarget: detail.actionTarget }),
+        ...(detail?.sequenceDetail && { sequenceDetail: detail.sequenceDetail }),
       },
     });
   }
@@ -323,12 +338,14 @@ export class WebviewProvider implements vscode.Disposable {
     const deckJson = JSON.stringify({
       title: this.currentDeck?.title,
       slideCount: this.currentDeck?.slides.length ?? 0,
-      slides: this.currentDeck?.slides.map((slide, index) => ({
-        index,
-        content: slide.html,
-        hasActions: slide.onEnterActions.length > 0 || slide.interactiveElements.length > 0,
-        speakerNotes: slide.speakerNotes,
-      })),
+      slides: this.currentDeck?.slides.map((slide, index) => {
+        return {
+          index,
+          content: slide.html + renderBlockElements(slide),
+          hasActions: slide.onEnterActions.length > 0 || slide.interactiveElements.length > 0,
+          speakerNotes: slide.speakerNotes,
+        };
+      }),
       options: {
         showSlideNumbers: options.showSlideNumbers ?? true,
         showProgress: options.showProgress ?? false,
@@ -427,4 +444,5 @@ export class WebviewProvider implements vscode.Disposable {
     }
     return text;
   }
+
 }
