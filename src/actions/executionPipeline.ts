@@ -21,11 +21,37 @@ export function actionRequiresTrust(actionType: ActionType): boolean {
 }
 
 /**
+ * Extract the primary target from an action's params.
+ * Used for rich error display (per error-feedback contract, T028).
+ */
+function extractActionTarget(action: Action): string | undefined {
+  const p = action.params;
+  switch (action.type) {
+    case 'file.open':
+    case 'editor.highlight':
+      return typeof p.path === 'string' ? p.path : undefined;
+    case 'terminal.run':
+      return typeof p.command === 'string' ? p.command : undefined;
+    case 'debug.start':
+      return typeof p.configName === 'string' ? p.configName : undefined;
+    case 'vscode.command':
+      return typeof p.id === 'string' ? p.id : undefined;
+    case 'sequence':
+      return undefined; // detail comes via sequenceDetail
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Execute an action through the full pipeline:
  * 1. Trust gate - block untrusted actions
  * 2. Validation - validate parameters
  * 3. Timeout wrapper - enforce time limits
  * 4. Execute - run the action
+ *
+ * On failure, the result includes `actionType` and `actionTarget` for
+ * rich error feedback in the webview (per error-feedback contract, T028).
  */
 export async function executeWithPipeline(
   action: Action,
@@ -42,22 +68,22 @@ export async function executeWithPipeline(
   // Get executor
   const executor = registry.get(action.type);
   if (!executor) {
-    return {
+    return enrichFailure({
       success: false,
       error: `Unknown action type: ${action.type}`,
       canUndo: false,
       durationMs: Date.now() - startTime,
-    };
+    }, action);
   }
 
   // Step 1: Trust gate
   if (!options.skipTrustCheck && executor.requiresTrust && !context.isWorkspaceTrusted) {
-    return {
+    return enrichFailure({
       success: false,
       error: `Action "${action.type}" requires workspace trust`,
       canUndo: false,
       durationMs: Date.now() - startTime,
-    };
+    }, action);
   }
 
   // Step 2: Validation
@@ -65,19 +91,35 @@ export async function executeWithPipeline(
     try {
       executor.validate(action.params);
     } catch (error) {
-      return {
+      return enrichFailure({
         success: false,
         error: error instanceof Error ? error.message : 'Validation failed',
         canUndo: false,
         durationMs: Date.now() - startTime,
-      };
+      }, action);
     }
   }
 
   // Step 3: Execute with timeout
   const timeoutMs = options.timeoutMs ?? executor.defaultTimeoutMs ?? 30000;
 
-  return executeWithTimeout(executor, action, context, timeoutMs);
+  const result = await executeWithTimeout(executor, action, context, timeoutMs);
+
+  // Enrich failures with action metadata for toast display
+  if (!result.success) {
+    return enrichFailure(result, action);
+  }
+
+  return result;
+}
+
+/**
+ * Stamp actionType and actionTarget onto a failed ExecutionResult.
+ */
+function enrichFailure(result: ExecutionResult, action: Action): ExecutionResult {
+  result.actionType = action.type;
+  result.actionTarget = extractActionTarget(action);
+  return result;
 }
 
 /**

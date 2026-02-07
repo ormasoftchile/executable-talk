@@ -984,3 +984,136 @@ html, body {
   opacity: 1 !important;
   background-color: rgba(255, 255, 0, 0.2);
 }
+
+/* =========================================================================
+ * Toast Notification System (per error-feedback contract, T032)
+ * ========================================================================= */
+
+.toast-container {
+  position: fixed;
+  bottom: 5rem;
+  right: 1rem;
+  z-index: 80;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  pointer-events: none;
+  width: min(350px, 40vw);
+}
+
+.toast {
+  pointer-events: auto;
+  background: var(--vscode-editorWidget-background, #252526);
+  border: 1px solid var(--vscode-editorWidget-border, #454545);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--vscode-foreground, #cccccc);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Error severity — red left accent */
+.toast--error {
+  border-left: 3px solid var(--vscode-errorForeground, #f44747);
+}
+
+/* Warning severity — yellow left accent */
+.toast--warning {
+  border-left: 3px solid var(--vscode-editorWarning-foreground, #cca700);
+}
+
+/* Entry animation: slide in from right */
+.toast--entering {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+/* Exit animation: fade out + slide right */
+.toast--exiting {
+  transform: translateX(50px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Toast header: icon + title + dismiss */
+.toast__header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.toast__icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.toast__title {
+  font-weight: 600;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast__dismiss {
+  background: none;
+  border: none;
+  color: var(--vscode-foreground, #cccccc);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0 0.25rem;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.toast__dismiss:hover {
+  opacity: 1;
+}
+
+/* Action target (file path, command, etc.) */
+.toast__target {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.8rem;
+  color: var(--vscode-descriptionForeground, #999);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.25rem;
+}
+
+/* Error message */
+.toast__message {
+  font-size: 0.8rem;
+  color: var(--vscode-descriptionForeground, #999);
+  word-wrap: break-word;
+}
+
+/* Sequence step list */
+.toast__steps {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.toast__step--success {
+  color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.toast__step--failed {
+  color: var(--vscode-errorForeground, #f44747);
+}
+
+.toast__step--skipped {
+  color: var(--vscode-descriptionForeground, #999);
+  opacity: 0.7;
+}
+
+.toast__step-error {
+  font-size: 0.75rem;
+  color: var(--vscode-errorForeground, #f44747);
+  opacity: 0.8;
+}
