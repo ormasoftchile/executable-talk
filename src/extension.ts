@@ -1,12 +1,20 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { Conductor } from './conductor';
 import { parseDeck } from './parser';
 import { registerAllExecutors } from './actions';
 import { ActionCompletionProvider } from './providers/actionCompletionProvider';
 import { ActionHoverProvider } from './providers/actionHoverProvider';
 import { ActionDiagnosticProvider } from './providers/actionDiagnosticProvider';
+import {
+    LanguageClient,
+    LanguageClientOptions,
+    ServerOptions,
+    TransportKind,
+} from 'vscode-languageclient/node';
 
 let conductor: Conductor | undefined;
+let languageClient: LanguageClient | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
     console.log('Executable Talk extension is now active');
@@ -117,15 +125,88 @@ export function activate(context: vscode.ExtensionContext): void {
         }
     );
 
-    // Register authoring assistance providers (US4)
+    // Register authoring assistance — LSP or legacy providers (US4)
+    const useLsp = vscode.workspace.getConfiguration('executableTalk').get<boolean>('useLsp', true);
     const documentSelector: vscode.DocumentSelector = { language: 'deck-markdown' };
 
+    if (useLsp) {
+        // ─── LSP Client ──────────────────────────────────────────────────────
+        const serverModule = context.asAbsolutePath(
+            path.join('out', 'src', 'server', 'server.js'),
+        );
+
+        const serverOptions: ServerOptions = {
+            run: { module: serverModule, transport: TransportKind.ipc },
+            debug: {
+                module: serverModule,
+                transport: TransportKind.ipc,
+                options: { execArgv: ['--nolazy', '--inspect=6009'] },
+            },
+        };
+
+        const clientOptions: LanguageClientOptions = {
+            documentSelector: [{ language: 'deck-markdown' }],
+            synchronize: {
+                fileEvents: vscode.workspace.createFileSystemWatcher('**/.clientrc'),
+            },
+        };
+
+        languageClient = new LanguageClient(
+            'executableTalkLsp',
+            'Executable Talk Language Server',
+            serverOptions,
+            clientOptions,
+        );
+
+        // Handle custom requests from the server
+        languageClient.onRequest('executableTalk/workspaceFiles', async () => {
+            return getWorkspaceFiles();
+        });
+
+        languageClient.onRequest('executableTalk/launchConfigs', async () => {
+            return getLaunchConfigs();
+        });
+
+        void languageClient.start();
+        context.subscriptions.push({ dispose: () => { void languageClient?.stop(); } });
+    } else {
+        // ─── Legacy Providers ────────────────────────────────────────────────
+        registerLegacyProviders(context, documentSelector);
+    }
+
+    // Listen for configuration changes to hot-swap LSP ↔ legacy
+    const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(async (e) => {
+        if (e.affectsConfiguration('executableTalk.useLsp')) {
+            void vscode.window.showInformationMessage(
+                'Executable Talk: Restart VS Code to apply the LSP setting change.',
+            );
+        }
+    });
+
+    context.subscriptions.push(
+        openPresentationDisposable,
+        closePresentationDisposable,
+        resetPresentationDisposable,
+        nextSlideDisposable,
+        previousSlideDisposable,
+        openPresenterViewDisposable,
+        validateDeckDisposable,
+        configChangeDisposable,
+    );
+}
+
+// ─── Legacy Provider Registration ────────────────────────────────────────────
+
+function registerLegacyProviders(
+    context: vscode.ExtensionContext,
+    documentSelector: vscode.DocumentSelector,
+): void {
     const completionProvider = new ActionCompletionProvider();
     const completionDisposable = vscode.languages.registerCompletionItemProvider(
         documentSelector,
         {
-            provideCompletionItems(document, position, token, context) {
-                const items = completionProvider.provideCompletionItems(document, position, token, context);
+            provideCompletionItems(document, position, token, completionContext) {
+                const items = completionProvider.provideCompletionItems(document, position, token, completionContext);
                 if (!items) {
                     return undefined;
                 }
@@ -138,13 +219,10 @@ export function activate(context: vscode.ExtensionContext): void {
                         const r = item.range;
                         ci.range = new vscode.Range(r.startLine, r.startChar, r.endLine, r.endChar);
                     }
-                    // Ensure items always show regardless of typed text
                     ci.filterText = item.insertText ?? item.label;
                     return ci;
                 });
-                // isIncomplete: re-query on every keystroke so items aren't
-                // filtered away when the typed text doesn't match any label
-                return new vscode.CompletionList(vsItems, /* isIncomplete */ true);
+                return new vscode.CompletionList(vsItems, true);
             },
         },
         ':', '/', ' ',
@@ -154,8 +232,8 @@ export function activate(context: vscode.ExtensionContext): void {
     const hoverDisposable = vscode.languages.registerHoverProvider(
         documentSelector,
         {
-            provideHover(document, position, token) {
-                const result = hoverProvider.provideHover(document, position, token);
+            provideHover(document, position, _token) {
+                const result = hoverProvider.provideHover(document, position, _token);
                 if (!result) {
                     return undefined;
                 }
@@ -193,7 +271,6 @@ export function activate(context: vscode.ExtensionContext): void {
         diagnosticCollection.set(document.uri, vscDiags);
     }
 
-    // Update diagnostics on document open and change
     const onChangeDisposable = vscode.workspace.onDidChangeTextDocument((e) => {
         updateDiagnostics(e.document);
     });
@@ -204,31 +281,97 @@ export function activate(context: vscode.ExtensionContext): void {
         diagnosticCollection.delete(doc.uri);
     });
 
-    // Update diagnostics for all currently open deck-markdown documents
     for (const doc of vscode.workspace.textDocuments) {
         updateDiagnostics(doc);
     }
 
     context.subscriptions.push(
-        openPresentationDisposable,
-        closePresentationDisposable,
-        resetPresentationDisposable,
-        nextSlideDisposable,
-        previousSlideDisposable,
-        openPresenterViewDisposable,
-        validateDeckDisposable,
         completionDisposable,
         hoverDisposable,
         diagnosticCollection,
         onChangeDisposable,
         onOpenDisposable,
         onCloseDisposable,
-        { dispose() { diagnosticProvider.dispose(); } }
+        { dispose() { diagnosticProvider.dispose(); } },
     );
 }
 
-export function deactivate(): void {
+// ─── Workspace File Helpers for LSP ──────────────────────────────────────────
+
+interface CachedFileInfo {
+    relativePath: string;
+    uri: string;
+}
+
+interface CachedLaunchConfigInfo {
+    name: string;
+    uri: string;
+    line: number;
+}
+
+async function getWorkspaceFiles(): Promise<CachedFileInfo[]> {
+    const files: CachedFileInfo[] = [];
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        return files;
+    }
+
+    const pattern = new vscode.RelativePattern(workspaceFolders[0], '**/*');
+    const uris = await vscode.workspace.findFiles(pattern, '**/node_modules/**', 5000);
+
+    for (const uri of uris) {
+        const relativePath = vscode.workspace.asRelativePath(uri, false);
+        files.push({ relativePath, uri: uri.toString() });
+    }
+
+    return files;
+}
+
+async function getLaunchConfigs(): Promise<CachedLaunchConfigInfo[]> {
+    const configs: CachedLaunchConfigInfo[] = [];
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        return configs;
+    }
+
+    for (const folder of workspaceFolders) {
+        const launchUri = vscode.Uri.joinPath(folder.uri, '.vscode', 'launch.json');
+        try {
+            const content = await vscode.workspace.fs.readFile(launchUri);
+            const text = Buffer.from(content).toString('utf-8');
+            // Simple JSON parse to find configuration names
+            const json = JSON.parse(text) as { configurations?: Array<{ name?: string }> };
+            if (json.configurations && Array.isArray(json.configurations)) {
+                for (let i = 0; i < json.configurations.length; i++) {
+                    const config = json.configurations[i];
+                    if (config?.name) {
+                        // Rough line estimate: search for the name in text
+                        const nameIdx = text.indexOf(`"name": "${config.name}"`);
+                        const line = nameIdx >= 0
+                            ? text.substring(0, nameIdx).split('\n').length - 1
+                            : 0;
+                        configs.push({
+                            name: config.name,
+                            uri: launchUri.toString(),
+                            line,
+                        });
+                    }
+                }
+            }
+        } catch {
+            // launch.json doesn't exist or is invalid — ignore
+        }
+    }
+
+    return configs;
+}
+
+export async function deactivate(): Promise<void> {
     console.log('Executable Talk extension is now deactivated');
+    if (languageClient) {
+        await languageClient.stop();
+        languageClient = undefined;
+    }
     conductor?.dispose();
     conductor = undefined;
 }

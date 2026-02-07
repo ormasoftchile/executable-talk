@@ -1,0 +1,62 @@
+{
+  "version": "1.0.0",
+  "entries": [
+    {
+      "id": "focus-1770486144094-x6zdplbtu",
+      "uriString": "file:///Volumes/Projects/executable-talk/examples",
+      "type": "folder",
+      "children": [
+        {
+          "id": "focus-1770486144096-gky0vdwu9",
+          "uriString": "file:///Volumes/Projects/executable-talk/examples/demo.deck.md",
+          "type": "file",
+          "label": "demo.deck.md",
+          "metadata": {
+            "dateAdded": 1770486144096,
+            "relativePath": "demo.deck.md",
+            "order": 0
+          }
+        },
+        {
+          "id": "focus-1770486144097-dqbtyutlp",
+          "uriString": "file:///Volumes/Projects/executable-talk/examples/package.json",
+          "type": "file",
+          "label": "package.json",
+          "metadata": {
+            "dateAdded": 1770486144097,
+            "relativePath": "package.json",
+            "order": 1
+          }
+        },
+        {
+          "id": "focus-1770486144098-kgwso25up",
+          "uriString": "file:///Volumes/Projects/executable-talk/examples/README.md",
+          "type": "file",
+          "label": "README.md",
+          "metadata": {
+            "dateAdded": 1770486144098,
+            "relativePath": "README.md",
+            "order": 2
+          }
+        },
+        {
+          "id": "focus-1770486144098-o2deo7d96",
+          "uriString": "file:///Volumes/Projects/executable-talk/examples/showcase.deck.md",
+          "type": "file",
+          "label": "showcase.deck.md",
+          "metadata": {
+            "dateAdded": 1770486144098,
+            "relativePath": "showcase.deck.md",
+            "order": 3
+          }
+        }
+      ],
+      "metadata": {
+        "dateAdded": 1770486144094,
+        "relativePath": "",
+        "order": 0
+      }
+    }
+  ],
+  "lastModified": 1770486144606
+}
