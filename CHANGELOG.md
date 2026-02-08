@@ -5,6 +5,24 @@ All notable changes to the Executable Talk extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-08
+
+### Added
+
+- **Deck Environment Variables** (Feature 006): Parameterize presentations with per-machine values
+  - Declare variables in frontmatter `env:` block with `name`, `description`, `required`, `secret`, `validate`, `default`
+  - Values loaded from `.deck.env` files (KEY=VALUE format, gitignored by convention)
+  - `{{VAR}}` interpolation in all action string parameters — display path masks secrets, execution path uses real values
+  - Six validation rules: `directory`, `file`, `command`, `url`, `port`, `regex:<pattern>`
+  - Preflight validation: missing required vars, invalid values, gitignore check, unused vars warning
+  - Secret masking: secret values never appear in the webview; error messages and streaming output are scrubbed
+  - Guided setup flow: toast notification with "Set Up Now" generates `.deck.env.example` template and opens `.deck.env` in editor
+  - Live reload: `FileSystemWatcher` on `.deck.env` re-resolves variables on save with 500ms debounce
+  - Env status badge in presentation toolbar (green ✓ / yellow ⚠) — click to trigger guided setup
+  - Authoring assistance: autocomplete for env declaration properties, validation rules, and `{{VAR}}` references; hover documentation for all env properties
+  - Real-time diagnostics: `env-undeclared-ref`, `env-duplicate-name`, `env-invalid-rule`, `env-invalid-name`
+  - Backward compatible: decks without `env:` block load identically with no behavioral changes
+
 ## [0.3.0] - 2026-02-08
 
 ### Added
