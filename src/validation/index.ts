@@ -8,3 +8,4 @@ export { LineRangeValidator } from './lineRangeValidator';
 export { DebugConfigValidator } from './debugConfigValidator';
 export { CommandAvailabilityValidator } from './commandValidator';
 export { PreflightValidator } from './preflightValidator';
+export { EnvRuleValidator } from './envRuleValidator';
