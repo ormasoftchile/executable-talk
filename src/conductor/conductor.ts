@@ -3,6 +3,8 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { Deck } from '../models/deck';
 import { EnvStatus, EnvStatusEntry, ResolvedEnv } from '../models/env';
 import { Slide } from '../models/slide';
@@ -48,6 +50,8 @@ export class Conductor implements vscode.Disposable {
   private envResolver: EnvResolver;
   private secretScrubber: SecretScrubber;
   private resolvedEnv: ResolvedEnv | undefined;
+  private envFileWatcher: vscode.Disposable | undefined;
+  private envDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(extensionUri: vscode.Uri) {
     this.stateStack = new StateStack();
@@ -92,6 +96,16 @@ export class Conductor implements vscode.Disposable {
     // Resolve environment variables (Feature 006 — T016)
     await this.resolveEnvironment(deck);
 
+    // Guided setup toast (Feature 006 — T036)
+    if (deck.envDeclarations.length > 0) {
+      const envFile = await this.envFileLoader.loadEnvFile(deck.filePath);
+      if (!envFile.exists) {
+        this.showEnvSetupToast(deck);
+      }
+      // Start file watcher for .deck.env (Feature 006 — T039)
+      this.startEnvFileWatcher(deck);
+    }
+
     // Load authored scenes from deck frontmatter (T044 [US5])
     if (deck.metadata?.scenes && deck.metadata.scenes.length > 0) {
       this.sceneStore.loadAuthored(deck.metadata.scenes);
@@ -129,6 +143,7 @@ export class Conductor implements vscode.Disposable {
       onSaveScene: (sceneName) => void this.handleSaveScene(sceneName),
       onRestoreScene: (sceneName) => void this.handleRestoreScene(sceneName),
       onDeleteScene: (sceneName) => this.handleDeleteScene(sceneName),
+      onEnvSetupRequest: () => void this.handleEnvSetupRequest(),
     };
 
     // Show presentation
@@ -280,6 +295,9 @@ export class Conductor implements vscode.Disposable {
   async close(): Promise<void> {
     // Exit Zen Mode
     await exitZenMode();
+
+    // Dispose env file watcher (Feature 006 — T040)
+    this.disposeEnvFileWatcher();
 
     // Clear state
     this.stateStack.clear();
@@ -531,6 +549,7 @@ export class Conductor implements vscode.Disposable {
    * Dispose of the conductor
    */
   dispose(): void {
+    this.disposeEnvFileWatcher();
     this.webviewProvider.dispose();
     this.presenterViewProvider.dispose();
     this.snapshotFactory.disposeDecorations();
@@ -1081,6 +1100,125 @@ export class Conductor implements vscode.Disposable {
       isComplete: this.resolvedEnv.isComplete,
       variables,
     };
+  }
+
+  /**
+   * Show guided setup toast when .deck.env is missing (Feature 006 — T036).
+   */
+  private showEnvSetupToast(deck: Deck): void {
+    void vscode.window.showInformationMessage(
+      'This deck requires environment setup',
+      'Set Up Now',
+    ).then((choice) => {
+      if (choice === 'Set Up Now') {
+        void this.runEnvSetup(deck);
+      }
+    });
+  }
+
+  /**
+   * Handle envSetupRequest from webview (Feature 006 — T038).
+   */
+  private async handleEnvSetupRequest(): Promise<void> {
+    if (this.deck) {
+      await this.runEnvSetup(this.deck);
+    }
+  }
+
+  /**
+   * Run guided environment setup: generate template, create .deck.env, open in editor (Feature 006 — T037).
+   */
+  private async runEnvSetup(deck: Deck): Promise<void> {
+    if (!deck.envDeclarations || deck.envDeclarations.length === 0) {
+      return;
+    }
+
+    const deckBasename = path.basename(deck.filePath);
+    const examplePath = deck.filePath.replace(/\.deck\.md$/, '.deck.env.example');
+    const envPath = deck.filePath.replace(/\.deck\.md$/, '.deck.env');
+
+    try {
+      // Generate .deck.env.example if not exists
+      if (!fs.existsSync(examplePath)) {
+        const template = this.envFileLoader.generateTemplate(deck.envDeclarations, deckBasename);
+        fs.writeFileSync(examplePath, template, 'utf-8');
+        this.outputChannel.appendLine(`[Env] Generated template: ${examplePath}`);
+      }
+
+      // Create .deck.env from example if not exists
+      if (!fs.existsSync(envPath)) {
+        fs.copyFileSync(examplePath, envPath);
+        this.outputChannel.appendLine(`[Env] Created env file: ${envPath}`);
+      }
+
+      // Open .deck.env in editor
+      const doc = await vscode.workspace.openTextDocument(envPath);
+      await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
+
+      void vscode.window.showInformationMessage(
+        'Fill in the values for your environment variables',
+      );
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.outputChannel.appendLine(`[Env] Setup failed: ${msg}`);
+      void vscode.window.showErrorMessage(`Environment setup failed: ${msg}`);
+    }
+  }
+
+  /**
+   * Start watching .deck.env file for changes (Feature 006 — T039).
+   * 500ms debounce, re-parses and re-resolves env, updates webview.
+   */
+  private startEnvFileWatcher(deck: Deck): void {
+    // Dispose existing watcher
+    this.disposeEnvFileWatcher();
+
+    const deckDir = path.dirname(deck.filePath);
+    const pattern = new vscode.RelativePattern(deckDir, '*.deck.env');
+    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+    const onChange = () => {
+      // Debounce 500ms
+      if (this.envDebounceTimer) {
+        clearTimeout(this.envDebounceTimer);
+      }
+      this.envDebounceTimer = setTimeout(async () => {
+        if (!this.deck) {
+          return;
+        }
+        try {
+          await this.resolveEnvironment(this.deck);
+          const envStatus = this.buildEnvStatus();
+          if (envStatus) {
+            this.webviewProvider.sendEnvStatusChanged({ envStatus });
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          this.outputChannel.appendLine(`[Env] Watcher re-resolve failed: ${msg}`);
+        }
+      }, 500);
+    };
+
+    watcher.onDidChange(onChange);
+    watcher.onDidCreate(onChange);
+    watcher.onDidDelete(onChange);
+
+    this.envFileWatcher = watcher;
+    this.disposables.push(watcher);
+  }
+
+  /**
+   * Dispose the env file watcher and debounce timer (Feature 006 — T040).
+   */
+  private disposeEnvFileWatcher(): void {
+    if (this.envDebounceTimer) {
+      clearTimeout(this.envDebounceTimer);
+      this.envDebounceTimer = undefined;
+    }
+    if (this.envFileWatcher) {
+      this.envFileWatcher.dispose();
+      this.envFileWatcher = undefined;
+    }
   }
 
   /**
