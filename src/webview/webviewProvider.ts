@@ -18,6 +18,8 @@ import {
   SaveSceneMessage,
   RestoreSceneMessage,
   DeleteSceneMessage,
+  EnvSetupRequestMessage,
+  EnvStatusChangedPayload,
   OpenSlidePickerPayload,
   OpenScenePickerPayload,
   SceneChangedPayload,
@@ -44,6 +46,7 @@ export interface WebviewCallbacks {
   onSaveScene?(sceneName: string): void;
   onRestoreScene?(sceneName: string): void;
   onDeleteScene?(sceneName: string): void;
+  onEnvSetupRequest?(): void;
 }
 
 /**
@@ -240,8 +243,16 @@ export class WebviewProvider implements vscode.Disposable {
   }
 
   /**
+   * Send env status changed message to webview (Feature 006).
+   */
+  sendEnvStatusChanged(envStatus: EnvStatusChangedPayload): void {
+    this.postMessage({ type: 'envStatusChanged', payload: envStatus });
+  }
+
+  /**
    * Check if panel is visible
    */
+
   isVisible(): boolean {
     return this.panel?.visible ?? false;
   }
@@ -311,6 +322,9 @@ export class WebviewProvider implements vscode.Disposable {
       },
       onDeleteScene: (msg: DeleteSceneMessage) => {
         this.callbacks?.onDeleteScene?.(msg.payload.sceneName);
+      },
+      onEnvSetupRequest: (_msg: EnvSetupRequestMessage) => {
+        this.callbacks?.onEnvSetupRequest?.();
       },
     };
 
@@ -444,6 +458,7 @@ export class WebviewProvider implements vscode.Disposable {
       <button id="btn-last" title="Last slide (End)">⏭</button>
     </nav>
     ${toolbarConfig}
+    <div id="env-badge" class="env-badge hidden" title="Environment variables status"></div>
     <div id="action-overlay" class="hidden" role="alert" aria-live="assertive">
       <div id="action-status"></div>
     </div>

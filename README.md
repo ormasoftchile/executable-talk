@@ -16,6 +16,8 @@ Transform your Markdown presentations into live coding demonstrations with VS Co
 - **Syntax Highlighting**: Full Markdown highlighting in `.deck.md` files with YAML coloring inside `action` blocks
 - **Zen Mode**: Presentations automatically enter distraction-free Zen Mode
 - **Presenter View**: Open speaker notes and next slide preview on a secondary panel
+- **Environment Variables**: Parameterize decks with `{{VAR}}` placeholders and `.deck.env` sidecar files for portable onboarding decks
+- **Secret Masking**: Mark variables as `secret` to prevent tokens and credentials from appearing on screen
 - **Workspace Trust**: Actions that execute code require Workspace Trust for security
 
 ## Getting Started
@@ -161,7 +163,7 @@ Runs a command in the integrated terminal. **Requires Workspace Trust.**
 
 | Parameter | Description | Required |
 |-----------|-------------|----------|
-| `command` | URL-encoded command to execute | Yes |
+| `command` | URL-encoded command to execute. Supports `{{VAR}}` env placeholders. | Yes |
 
 ### `debug.start`
 
@@ -505,6 +507,167 @@ Show git diffs or file comparisons.
 # Show changes since a specific branch
 [](render:diff?path=src/feature.ts&before=main)
 ```
+
+## Environment Variables
+
+Parameterize your presentations so the same `.deck.md` file works across different machines, users, and environments — without hardcoding paths, tokens, or configuration.
+
+### Declare Variables in Frontmatter
+
+Add an `env:` block to your deck's YAML frontmatter:
+
+```yaml
+---
+title: "Team Onboarding"
+env:
+  - name: REPO_PATH
+    description: "Path to the cloned repository"
+    required: true
+    validate: directory
+
+  - name: GH_TOKEN
+    description: "GitHub personal access token"
+    secret: true
+
+  - name: BRANCH
+    description: "Feature branch to work on"
+    default: "main"
+---
+```
+
+#### Declaration Properties
+
+| Property | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `name` | ✓ | — | Variable name (letters, digits, underscores) |
+| `description` | | `""` | Shown in hover tooltips and guided setup |
+| `required` | | `false` | Error if not set in `.deck.env` |
+| `secret` | | `false` | Value masked in the presentation UI |
+| `validate` | | — | Validation rule (see below) |
+| `default` | | — | Fallback when not set in `.deck.env` |
+
+### Create a `.deck.env` File
+
+Create a sidecar file with the same base name, replacing `.deck.md` with `.deck.env`:
+
+```
+my-talk/
+  ├── onboarding.deck.md          ← Your presentation
+  ├── onboarding.deck.env         ← Your local values (gitignored!)
+  └── onboarding.deck.env.example ← Template for others (committed)
+```
+
+Fill in your values:
+
+```bash
+# onboarding.deck.env
+REPO_PATH=/home/alice/projects/my-repo
+GH_TOKEN=ghp_abc123def456ghi789
+BRANCH=feature/onboarding
+```
+
+> **⚠️ Important**: Add `*.deck.env` to your `.gitignore` to prevent committing secrets!
+
+### Use `{{VAR}}` in Actions
+
+Reference your variables using double-brace syntax:
+
+````markdown
+```action
+type: file.open
+path: "{{REPO_PATH}}/package.json"
+label: Open package.json
+```
+````
+
+````markdown
+```action
+type: terminal.run
+command: cd {{REPO_PATH}} && npm install
+label: Install Dependencies
+```
+````
+
+Or with inline action links:
+
+```markdown
+[Open File](action:file.open?path={{REPO_PATH}}/package.json)
+[Run Tests](action:terminal.run?command=cd%20{{REPO_PATH}}%20%26%26%20npm%20test)
+```
+
+When the action executes, `{{REPO_PATH}}` is replaced with the real value from `.deck.env`. Both `{{VAR}}` env placeholders and `${home}` platform placeholders can coexist in the same command.
+
+### Secret Masking
+
+Variables with `secret: true` are protected during live presentations:
+
+```yaml
+env:
+  - name: API_TOKEN
+    secret: true
+    required: true
+```
+
+- **Displayed in presentation**: `curl -H "Authorization: Bearer {{API_TOKEN}}" https://api.example.com`
+- **Actually executed**: `curl -H "Authorization: Bearer ghp_abc123..." https://api.example.com`
+- **Terminal output scrubbed**: Secret values replaced with `•••••` before display
+
+### Validation Rules
+
+Catch configuration problems before the presentation starts:
+
+```yaml
+env:
+  - name: REPO_PATH
+    validate: directory      # Must be an existing directory
+
+  - name: CONFIG_FILE
+    validate: file           # Must be an existing file
+
+  - name: NODE_CMD
+    validate: command        # Must be in PATH (e.g., node, git)
+
+  - name: API_URL
+    validate: url            # Must be a valid HTTP/HTTPS URL
+
+  - name: SERVER_PORT
+    validate: port           # Must be 1-65535
+
+  - name: VERSION
+    validate: "regex:^\\d+\\.\\d+\\.\\d+$"  # Must match semver pattern
+```
+
+Validation runs during **preflight check** (`Executable Talk: Validate Deck`). Issues appear in the Problems panel.
+
+### Guided Setup
+
+When a deck has environment variables, the extension helps get set up:
+
+1. **Env status badge** appears in the presentation corner showing resolution status (🟢 all resolved, 🟡 missing optional, 🔴 missing required)
+2. If variables are missing, click the badge or **"Set Up Now"** in the toast notification
+3. The extension generates a `.deck.env.example` template if needed
+4. Opens `.deck.env` in the editor for you to fill in
+5. As you save, the presentation refreshes automatically
+
+### Sharing Decks with Others
+
+To make your deck portable:
+
+1. **Commit** the `.deck.env.example` template:
+   ```bash
+   git add onboarding.deck.env.example
+   ```
+
+2. **Gitignore** the actual values file:
+   ```
+   # .gitignore
+   *.deck.env
+   ```
+
+3. When someone clones your repo, they:
+   1. Copy `.deck.env.example` → `.deck.env`
+   2. Fill in their own values
+   3. Open the deck — ready to present!
 
 ## Fragment Animations
 

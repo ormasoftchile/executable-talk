@@ -4,6 +4,7 @@
  */
 
 import { Deck } from '../models/deck';
+import { EnvDeclaration, ResolvedEnv } from '../models/env';
 
 /**
  * Severity levels for validation issues
@@ -66,6 +67,10 @@ export interface ValidationContext {
   isTrusted: boolean;
   /** Cancellation token */
   cancellationToken: { isCancellationRequested: boolean };
+  /** Environment declarations from frontmatter (Feature 006) */
+  envDeclarations?: EnvDeclaration[];
+  /** Resolved environment variables (Feature 006) */
+  resolvedEnv?: ResolvedEnv;
 }
 
 /**

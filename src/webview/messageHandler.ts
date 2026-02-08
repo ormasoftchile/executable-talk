@@ -17,6 +17,7 @@ import {
   SaveSceneMessage,
   RestoreSceneMessage,
   DeleteSceneMessage,
+  EnvSetupRequestMessage,
 } from './messages';
 
 // ============================================================================
@@ -101,6 +102,13 @@ export function isDeleteSceneMessage(msg: unknown): msg is DeleteSceneMessage {
 }
 
 /**
+ * Check if message is an env setup request message
+ */
+export function isEnvSetupRequestMessage(msg: unknown): msg is EnvSetupRequestMessage {
+  return isMessage(msg) && msg.type === 'envSetupRequest';
+}
+
+/**
  * Base message type check
  */
 function isMessage(msg: unknown): msg is { type: string } {
@@ -140,6 +148,7 @@ export interface MessageHandlers {
   onSaveScene?: (message: SaveSceneMessage) => void | Promise<void>;
   onRestoreScene?: (message: RestoreSceneMessage) => void | Promise<void>;
   onDeleteScene?: (message: DeleteSceneMessage) => void | Promise<void>;
+  onEnvSetupRequest?: (message: EnvSetupRequestMessage) => void | Promise<void>;
 }
 
 /**
@@ -175,6 +184,8 @@ export function createMessageDispatcher(handlers: MessageHandlers) {
         await handlers.onRestoreScene(message);
       } else if (isDeleteSceneMessage(message) && handlers.onDeleteScene) {
         await handlers.onDeleteScene(message);
+      } else if (isEnvSetupRequestMessage(message) && handlers.onEnvSetupRequest) {
+        await handlers.onEnvSetupRequest(message);
       } else {
         console.warn('Unhandled message type:', (message as WebviewToHostMessage).type);
       }
@@ -194,7 +205,7 @@ export function parseMessage(data: unknown): WebviewToHostMessage | null {
 
   const validTypes = [
     'navigate', 'executeAction', 'undo', 'redo', 'close', 'ready', 'vscodeCommand',
-    'goBack', 'saveScene', 'restoreScene', 'deleteScene',
+    'goBack', 'saveScene', 'restoreScene', 'deleteScene', 'envSetupRequest',
   ];
   if (!validTypes.includes(data.type)) {
     return null;
