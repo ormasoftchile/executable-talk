@@ -896,9 +896,10 @@ export class Conductor implements vscode.Disposable {
         // Display path: for actionStatusChanged messages (secrets masked)
         // Execution path: for executor (secrets resolved)
         const execParams = this.envResolver.interpolateForExecution(
-          action.params as Record<string, unknown>,
+          action.params,
           this.resolvedEnv,
         );
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
         executionAction = { ...action, params: execParams as Record<string, string> };
       }
 
@@ -1182,20 +1183,22 @@ export class Conductor implements vscode.Disposable {
       if (this.envDebounceTimer) {
         clearTimeout(this.envDebounceTimer);
       }
-      this.envDebounceTimer = setTimeout(async () => {
+      this.envDebounceTimer = setTimeout(() => {
         if (!this.deck) {
           return;
         }
-        try {
-          await this.resolveEnvironment(this.deck);
-          const envStatus = this.buildEnvStatus();
-          if (envStatus) {
-            this.webviewProvider.sendEnvStatusChanged({ envStatus });
+        void (async () => {
+          try {
+            await this.resolveEnvironment(this.deck!);
+            const envStatus = this.buildEnvStatus();
+            if (envStatus) {
+              this.webviewProvider.sendEnvStatusChanged({ envStatus });
+            }
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            this.outputChannel.appendLine(`[Env] Watcher re-resolve failed: ${msg}`);
           }
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : 'Unknown error';
-          this.outputChannel.appendLine(`[Env] Watcher re-resolve failed: ${msg}`);
-        }
+        })();
       }, 500);
     };
 
