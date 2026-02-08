@@ -458,6 +458,7 @@ export class WebviewProvider implements vscode.Disposable {
       <button id="btn-last" title="Last slide (End)">⏭</button>
     </nav>
     ${toolbarConfig}
+    <div id="env-badge" class="env-badge hidden" title="Environment variables status"></div>
     <div id="action-overlay" class="hidden" role="alert" aria-live="assertive">
       <div id="action-status"></div>
     </div>

@@ -1,7 +1,7 @@
 {
   "name": "executable-talk",
   "displayName": "Executable Talk",
-  "description": "Transform Markdown presentations into executable narratives with interactive code demonstrations",
+  "description": "Transform Markdown presentations into executable narratives with interactive code demonstrations and environment variable support",
   "version": "0.2.0",
   "publisher": "focus-space",
   "license": "MIT",
@@ -24,7 +24,9 @@
     "markdown",
     "demo",
     "executable",
-    "live coding"
+    "live coding",
+    "environment variables",
+    "deck.env"
   ],
   "engines": {
     "vscode": "^1.85.0"
