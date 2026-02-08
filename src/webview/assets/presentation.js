@@ -283,6 +283,10 @@
         case 'warning':
           handleWarning(message);
           break;
+
+        case 'envStatusChanged':
+          handleEnvStatusChanged(message);
+          break;
       }
     });
   }
@@ -494,6 +498,11 @@
     totalSlides = payload.totalSlides;
     slides = payload.slides || slides;
     showSlide(0);
+
+    // Initialize env badge if envStatus is present in deckLoaded payload
+    if (payload.envStatus) {
+      updateEnvBadge(payload.envStatus);
+    }
   }
 
   function handleActionStatusChanged(message) {
@@ -1504,6 +1513,56 @@
 
   function hideActionOverlay() {
     actionOverlay.classList.add('hidden');
+  }
+
+  // ─────────────────────────────────────────────────
+  // Env status badge (Feature 006 — T047)
+  // ─────────────────────────────────────────────────
+
+  /**
+   * Handle envStatusChanged message — update env badge.
+   */
+  function handleEnvStatusChanged(message) {
+    const envStatus = message.payload?.envStatus;
+    if (!envStatus) return;
+    updateEnvBadge(envStatus);
+  }
+
+  /**
+   * Update the env badge in the toolbar area.
+   * Green (✓) when all resolved, yellow (⚠) when issues exist.
+   * Click sends envSetupRequest to host.
+   */
+  function updateEnvBadge(envStatus) {
+    const badge = document.getElementById('env-badge');
+    if (!badge) return;
+
+    badge.classList.remove('hidden', 'env-badge--ok', 'env-badge--warn', 'env-badge--error');
+
+    if (envStatus.isComplete) {
+      badge.textContent = 'Env ✓';
+      badge.classList.add('env-badge--ok');
+      badge.title = 'All ' + envStatus.total + ' environment variables resolved';
+    } else {
+      const missing = envStatus.missing || 0;
+      const invalid = envStatus.invalid || 0;
+      const issues = missing + invalid;
+      badge.textContent = 'Env ⚠ ' + issues;
+      badge.classList.add('env-badge--warn');
+      
+      var parts = [];
+      if (missing > 0) parts.push(missing + ' missing');
+      if (invalid > 0) parts.push(invalid + ' invalid');
+      badge.title = 'Environment issues: ' + parts.join(', ');
+    }
+
+    // Set up click handler (only once)
+    if (!badge.dataset.initialized) {
+      badge.addEventListener('click', function () {
+        sendMessage({ type: 'envSetupRequest' });
+      });
+      badge.dataset.initialized = 'true';
+    }
   }
 
   /**

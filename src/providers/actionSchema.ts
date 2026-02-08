@@ -152,7 +152,7 @@ export const ACTION_SCHEMAS: ReadonlyMap<ActionType, ActionSchema> = new Map<Act
           name: 'command',
           type: 'string',
           required: true,
-          description: 'Command to execute in the terminal. Can be a plain string or a platform command map object with keys: macos, windows, linux, default. Example: { macos: "open .", windows: "explorer .", default: "xdg-open ." }. Supports placeholders: ${pathSep}, ${home}, ${shell}, ${pathDelimiter}.',
+          description: 'Command to execute in the terminal. Can be a plain string or a platform command map object with keys: macos, windows, linux, default. Example: { macos: "open .", windows: "explorer .", default: "xdg-open ." }. Supports placeholders: ${pathSep}, ${home}, ${shell}, ${pathDelimiter}. String params support `{{ENV_VAR}}` interpolation from env declarations.',
         },
         {
           name: 'name',
@@ -188,7 +188,7 @@ export const ACTION_SCHEMAS: ReadonlyMap<ActionType, ActionSchema> = new Map<Act
           name: 'cwd',
           type: 'string',
           required: false,
-          description: 'Working directory (workspace-relative).',
+          description: 'Working directory (workspace-relative). Supports `{{ENV_VAR}}` interpolation.',
           completionKind: 'file',
         },
       ],
@@ -372,3 +372,80 @@ export function findActionBlocks(document: { lineCount: number; lineAt(line: num
 
   return blocks;
 }
+
+// ─────────────────────────────────────────────────
+// Env Declaration Schema (Feature 006 — T043)
+// ─────────────────────────────────────────────────
+
+/**
+ * Schema for an env declaration property (used by completion/hover providers).
+ */
+export interface EnvPropertySchema {
+  /** Property name (e.g., 'name', 'required') */
+  name: string;
+  /** Value type */
+  type: 'string' | 'boolean';
+  /** Whether the property is required */
+  required: boolean;
+  /** Description for hover docs */
+  description: string;
+  /** Allowed values for enum-like properties */
+  enum?: string[];
+}
+
+/**
+ * Validation rules with descriptions for authoring assistance.
+ */
+export const VALIDATION_RULES: ReadonlyArray<{ name: string; description: string }> = [
+  { name: 'directory', description: 'Verifies path exists and is a directory' },
+  { name: 'file', description: 'Verifies path exists and is a file' },
+  { name: 'command', description: 'Verifies command is available on PATH' },
+  { name: 'url', description: 'Verifies value is a valid http/https URL' },
+  { name: 'port', description: 'Verifies value is a valid port number (1–65535)' },
+  { name: 'regex:', description: 'Verifies value matches the given regular expression (e.g., regex:^v\\d+)' },
+];
+
+/**
+ * Static schema for env declaration properties in frontmatter.
+ * Used by completion and hover providers.
+ * Per data-model.md EnvDeclarationSchema.
+ */
+export const ENV_DECLARATION_SCHEMA: ReadonlyArray<EnvPropertySchema> = [
+  {
+    name: 'name',
+    type: 'string',
+    required: true,
+    description: 'Unique variable name, referenced as `{{name}}` in action parameters.',
+  },
+  {
+    name: 'description',
+    type: 'string',
+    required: false,
+    description: 'Human-readable description shown during guided setup and in `.deck.env.example`.',
+  },
+  {
+    name: 'required',
+    type: 'boolean',
+    required: false,
+    description: 'Whether the variable must be present in `.deck.env`. Default: `false`. When `true`, preflight validation reports an error if the value is missing.',
+  },
+  {
+    name: 'secret',
+    type: 'boolean',
+    required: false,
+    description: 'When `true`, the value is masked in the webview (displayed as `•••••`) and scrubbed from error messages and streaming output. Default: `false`.',
+  },
+  {
+    name: 'validate',
+    type: 'string',
+    required: false,
+    description: 'Validation rule applied to the resolved value. Supported rules: `directory`, `file`, `command`, `url`, `port`, `regex:<pattern>`.',
+    enum: ['directory', 'file', 'command', 'url', 'port', 'regex:'],
+  },
+  {
+    name: 'default',
+    type: 'string',
+    required: false,
+    description: 'Fallback value used when `.deck.env` does not provide a value for this variable.',
+  },
+];

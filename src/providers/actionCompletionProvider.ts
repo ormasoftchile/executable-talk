@@ -12,6 +12,8 @@ import {
   findActionBlocks,
   ACTION_SCHEMAS,
   ActionBlockRange,
+  ENV_DECLARATION_SCHEMA,
+  VALIDATION_RULES,
 } from './actionSchema';
 import { ActionType } from '../models/action';
 
@@ -60,6 +62,12 @@ export class ActionCompletionProvider {
       return frontmatterItems;
     }
 
+    // Check if cursor is inside frontmatter env block (Feature 006 — T044)
+    const envItems = this.provideEnvCompletions(document, position);
+    if (envItems) {
+      return envItems;
+    }
+
     // Find action blocks in the document
     const blocks = findActionBlocks(document);
 
@@ -67,6 +75,21 @@ export class ActionCompletionProvider {
     const enclosingBlock = this.findEnclosingBlock(blocks, position.line);
     if (!enclosingBlock) {
       return null;
+    }
+
+    // Check for {{VAR}} completion inside action block (Feature 006 — T044)
+    const currentLineText = document.lineAt(position.line).text;
+    const textBeforeCursor = currentLineText.substring(0, position.character);
+    if (textBeforeCursor.includes('{{')) {
+      const lastDoubleBrace = textBeforeCursor.lastIndexOf('{{');
+      const afterBrace = textBeforeCursor.substring(lastDoubleBrace + 2);
+      // Only suggest if we're between {{ and }} (no closing }} yet)
+      if (!afterBrace.includes('}}')) {
+        const envVarItems = this.provideEnvVarCompletions(document);
+        if (envVarItems && envVarItems.length > 0) {
+          return envVarItems;
+        }
+      }
     }
 
     // Parse the YAML content to understand context
@@ -343,6 +366,140 @@ export class ActionCompletionProvider {
       }
     }
     return null;
+  }
+
+  // ─────────────────────────────────────────────────
+  // Env completions (Feature 006 — T044)
+  // ─────────────────────────────────────────────────
+
+  /**
+   * Provide completion items when cursor is inside an env: block in frontmatter.
+   * Suggests env declaration properties and validation rule values.
+   */
+  private provideEnvCompletions(
+    document: { lineCount: number; lineAt(line: number): { text: string }; getText(): string },
+    position: { line: number; character: number },
+  ): CompletionItem[] | null {
+    const fm = this.findFrontmatter(document);
+    if (!fm) {
+      return null;
+    }
+    const [fmStart, fmEnd] = fm;
+    if (position.line <= fmStart || position.line >= fmEnd) {
+      return null;
+    }
+
+    // Find if there's an env: line above the cursor
+    let envLineIdx = -1;
+    for (let i = position.line; i > fmStart; i--) {
+      if (/^env:\s*$/.test(document.lineAt(i).text)) {
+        envLineIdx = i;
+        break;
+      }
+      // If we hit a non-indented key (not a list item continuation), stop
+      if (i < position.line && /^\S/.test(document.lineAt(i).text) && !/^\s*-\s/.test(document.lineAt(i).text)) {
+        break;
+      }
+    }
+
+    if (envLineIdx < 0) {
+      return null;
+    }
+
+    const currentLine = document.lineAt(position.line).text;
+
+    // Check if cursor is on a validate: line — suggest validation rules
+    if (/^\s+validate:\s*/.test(currentLine)) {
+      return VALIDATION_RULES.map((rule) => ({
+        label: rule.name,
+        kind: CompletionKind.Value,
+        detail: rule.description,
+        documentation: rule.description,
+        insertText: rule.name,
+        sortText: `0_${rule.name}`,
+      }));
+    }
+
+    // If cursor is on a list item start, continuation line, or indented empty line, suggest env properties
+    if (/^\s+-\s*/.test(currentLine) || /^\s+\w/.test(currentLine) || /^\s+$/.test(currentLine)) {
+      // Detect which properties are already set in this item
+      const existingKeys = new Set<string>();
+      for (let i = position.line; i > envLineIdx; i--) {
+        const lineText = document.lineAt(i).text;
+        const keyMatch = lineText.match(/^\s+-?\s*(\w+):/);
+        if (keyMatch) {
+          existingKeys.add(keyMatch[1]);
+        }
+        if (/^\s+-\s/.test(lineText) && i < position.line) {
+          break; // Previous item boundary
+        }
+      }
+
+      const items: CompletionItem[] = [];
+      for (const prop of ENV_DECLARATION_SCHEMA) {
+        if (!existingKeys.has(prop.name)) {
+          items.push({
+            label: prop.name,
+            kind: CompletionKind.Property,
+            detail: `${prop.type}${prop.required ? ' (required)' : ''}`,
+            documentation: prop.description,
+            insertText: `${prop.name}: `,
+            sortText: prop.required ? `0_${prop.name}` : `1_${prop.name}`,
+          });
+        }
+      }
+
+      return items.length > 0 ? items : null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Suggest declared env variable names when typing {{ inside action blocks.
+   * Parses frontmatter env: declarations and returns variable names.
+   */
+  private provideEnvVarCompletions(
+    document: { lineCount: number; lineAt(line: number): { text: string }; getText(): string },
+  ): CompletionItem[] | null {
+    const fm = this.findFrontmatter(document);
+    if (!fm) {
+      return null;
+    }
+    const [fmStart, fmEnd] = fm;
+
+    // Extract declared env variable names from frontmatter
+    const varNames: string[] = [];
+    let inEnvBlock = false;
+    for (let i = fmStart + 1; i < fmEnd; i++) {
+      const lineText = document.lineAt(i).text;
+      if (/^env:\s*$/.test(lineText)) {
+        inEnvBlock = true;
+        continue;
+      }
+      if (inEnvBlock) {
+        if (/^\S/.test(lineText) && !/^\s/.test(lineText)) {
+          break; // End of env block
+        }
+        const nameMatch = lineText.match(/^\s+-?\s*name:\s*(\S+)/);
+        if (nameMatch) {
+          varNames.push(nameMatch[1]);
+        }
+      }
+    }
+
+    if (varNames.length === 0) {
+      return null;
+    }
+
+    return varNames.map((name) => ({
+      label: name,
+      kind: CompletionKind.Value,
+      detail: 'Env variable',
+      documentation: `Insert \`{{${name}}}\` — resolved from .deck.env at runtime.`,
+      insertText: `${name}}}`,
+      sortText: `0_${name}`,
+    }));
   }
 
   /**

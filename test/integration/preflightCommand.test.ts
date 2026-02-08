@@ -78,6 +78,7 @@ function buildErrorDeck(workspaceRoot: string): Deck {
     slides,
     currentSlideIndex: 0,
     metadata: { title: 'Integration Test Deck' },
+    envDeclarations: [],
     state: 'active',
   };
 }

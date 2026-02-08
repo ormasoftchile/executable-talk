@@ -3,7 +3,10 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { Deck } from '../models/deck';
+import { EnvStatus, EnvStatusEntry, ResolvedEnv } from '../models/env';
 import { Slide } from '../models/slide';
 import { Action, ActionType } from '../models/action';
 import { StateStack } from './stateStack';
@@ -19,6 +22,7 @@ import { parseRenderDirectives, resolveDirective, createLoadingPlaceholder, form
 import { parseDeck } from '../parser';
 import { PreflightValidator } from '../validation/preflightValidator';
 import { ValidationReport, ValidationIssue } from '../validation/types';
+import { EnvFileLoader, EnvResolver, SecretScrubber } from '../env';
 
 /**
  * Actions that require workspace trust
@@ -42,6 +46,12 @@ export class Conductor implements vscode.Disposable {
   private validationOutputChannel: vscode.OutputChannel;
   private validationDiagnostics: vscode.DiagnosticCollection;
   private cancellationTokenSource: vscode.CancellationTokenSource | undefined;
+  private envFileLoader: EnvFileLoader;
+  private envResolver: EnvResolver;
+  private secretScrubber: SecretScrubber;
+  private resolvedEnv: ResolvedEnv | undefined;
+  private envFileWatcher: vscode.Disposable | undefined;
+  private envDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(extensionUri: vscode.Uri) {
     this.stateStack = new StateStack();
@@ -55,6 +65,11 @@ export class Conductor implements vscode.Disposable {
     this.validationOutputChannel = vscode.window.createOutputChannel('Executable Talk Validation');
     this.validationDiagnostics = vscode.languages.createDiagnosticCollection('Executable Talk: Validation');
     this.disposables.push(this.outputChannel, this.validationOutputChannel, this.validationDiagnostics);
+
+    // Env resolution dependencies (Feature 006)
+    this.envFileLoader = new EnvFileLoader();
+    this.envResolver = new EnvResolver();
+    this.secretScrubber = new SecretScrubber();
 
     // Listen for workspace trust changes
     this.disposables.push(
@@ -77,6 +92,19 @@ export class Conductor implements vscode.Disposable {
     this.deck = deck;
     this.deck.state = 'loading';
     this.currentSlideIndex = 0;
+
+    // Resolve environment variables (Feature 006 — T016)
+    await this.resolveEnvironment(deck);
+
+    // Guided setup toast (Feature 006 — T036)
+    if (deck.envDeclarations.length > 0) {
+      const envFile = await this.envFileLoader.loadEnvFile(deck.filePath);
+      if (!envFile.exists) {
+        this.showEnvSetupToast(deck);
+      }
+      // Start file watcher for .deck.env (Feature 006 — T039)
+      this.startEnvFileWatcher(deck);
+    }
 
     // Load authored scenes from deck frontmatter (T044 [US5])
     if (deck.metadata?.scenes && deck.metadata.scenes.length > 0) {
@@ -115,6 +143,7 @@ export class Conductor implements vscode.Disposable {
       onSaveScene: (sceneName) => void this.handleSaveScene(sceneName),
       onRestoreScene: (sceneName) => void this.handleRestoreScene(sceneName),
       onDeleteScene: (sceneName) => this.handleDeleteScene(sceneName),
+      onEnvSetupRequest: () => void this.handleEnvSetupRequest(),
     };
 
     // Show presentation
@@ -267,6 +296,9 @@ export class Conductor implements vscode.Disposable {
     // Exit Zen Mode
     await exitZenMode();
 
+    // Dispose env file watcher (Feature 006 — T040)
+    this.disposeEnvFileWatcher();
+
     // Clear state
     this.stateStack.clear();
     this.snapshotFactory.disposeDecorations();
@@ -334,6 +366,8 @@ export class Conductor implements vscode.Disposable {
           workspaceRoot,
           isTrusted: isTrusted(),
           cancellationToken: token,
+          envDeclarations: this.deck?.envDeclarations,
+          resolvedEnv: this.resolvedEnv,
         });
       }
     );
@@ -515,6 +549,7 @@ export class Conductor implements vscode.Disposable {
    * Dispose of the conductor
    */
   dispose(): void {
+    this.disposeEnvFileWatcher();
     this.webviewProvider.dispose();
     this.presenterViewProvider.dispose();
     this.snapshotFactory.disposeDecorations();
@@ -776,6 +811,7 @@ export class Conductor implements vscode.Disposable {
           label: el.label,
           actionType: el.action.type,
         })) ?? [],
+        envStatus: this.buildEnvStatus(),
       });
 
       // Show first slide
@@ -853,6 +889,20 @@ export class Conductor implements vscode.Disposable {
     this.cancellationTokenSource = new vscode.CancellationTokenSource();
 
     try {
+      // Env interpolation before executor dispatch (Feature 006 — T019)
+      // {{VAR}} interpolation runs BEFORE platformResolver.expandPlaceholders()
+      let executionAction = action;
+      if (this.resolvedEnv && action.params) {
+        // Display path: for actionStatusChanged messages (secrets masked)
+        // Execution path: for executor (secrets resolved)
+        const execParams = this.envResolver.interpolateForExecution(
+          action.params,
+          this.resolvedEnv,
+        );
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+        executionAction = { ...action, params: execParams as Record<string, string> };
+      }
+
       const context: import('../actions/types').ExecutionContext = {
         workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '',
         deckFilePath: this.deck?.filePath ?? '',
@@ -862,7 +912,7 @@ export class Conductor implements vscode.Disposable {
         outputChannel: this.outputChannel,
       };
 
-      const result = await executor.execute(action, context);
+      const result = await executor.execute(executionAction, context);
 
       if (result.success) {
         this.webviewProvider.sendActionStatusChanged(statusId, 'success');
@@ -873,10 +923,14 @@ export class Conductor implements vscode.Disposable {
         }
       } else {
         // Forward rich error detail for toast display (per error-feedback contract, T030)
+        // Scrub secret values from error messages before sending to webview (T031)
+        const scrubbedError = this.resolvedEnv
+          ? this.secretScrubber.scrub(result.error ?? '', this.resolvedEnv)
+          : result.error;
         this.webviewProvider.sendActionStatusChanged(
           statusId,
           'failed',
-          result.error,
+          scrubbedError,
           {
             actionType: result.actionType ?? action.type,
             actionTarget: result.actionTarget,
@@ -885,10 +939,15 @@ export class Conductor implements vscode.Disposable {
         );
       }
     } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : 'Unknown error';
+      // Scrub secret values from catch-block error messages (T031)
+      const scrubbedMessage = this.resolvedEnv
+        ? this.secretScrubber.scrub(rawMessage, this.resolvedEnv)
+        : rawMessage;
       this.webviewProvider.sendActionStatusChanged(
         statusId,
         'failed',
-        error instanceof Error ? error.message : 'Unknown error'
+        scrubbedMessage
       );
     }
   }
@@ -956,6 +1015,213 @@ export class Conductor implements vscode.Disposable {
     );
 
     return result === 'Proceed';
+  }
+
+  /**
+   * Resolve environment variables for a deck (Feature 006 — T016).
+   * Loads .deck.env, merges with declarations, stores ResolvedEnv.
+   */
+  private async resolveEnvironment(deck: Deck): Promise<void> {
+    if (!deck.envDeclarations || deck.envDeclarations.length === 0) {
+      this.resolvedEnv = undefined;
+      return;
+    }
+
+    try {
+      // Load .deck.env sidecar file
+      const envFile = await this.envFileLoader.loadEnvFile(deck.filePath);
+
+      // Log env file parse errors as warnings
+      for (const err of envFile.errors) {
+        this.outputChannel.appendLine(`[Env] .deck.env line ${err.line}: ${err.message}`);
+      }
+
+      // Synchronous merge (no validation yet)
+      this.resolvedEnv = this.envResolver.resolveDeclarations(
+        deck.envDeclarations,
+        envFile,
+      );
+
+      // Log resolution status
+      const status = this.buildEnvStatus();
+      if (status) {
+        this.outputChannel.appendLine(
+          `[Env] Resolved ${status.resolved}/${status.total} variables` +
+          (status.missing.length > 0 ? ` (${status.missing.length} missing)` : '') +
+          (status.hasSecrets ? ' [has secrets]' : '')
+        );
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown env resolution error';
+      this.outputChannel.appendLine(`[Env] Resolution failed: ${msg}`);
+      this.resolvedEnv = undefined;
+    }
+  }
+
+  /**
+   * Build EnvStatus DTO from current resolved env (Feature 006 — T018).
+   */
+  private buildEnvStatus(): EnvStatus | undefined {
+    if (!this.resolvedEnv) {
+      return undefined;
+    }
+
+    const variables: EnvStatusEntry[] = [];
+    let resolved = 0;
+    const missing: string[] = [];
+    const invalid: string[] = [];
+    let hasSecrets = false;
+
+    for (const [, v] of this.resolvedEnv.variables) {
+      variables.push({
+        name: v.name,
+        status: v.status,
+        displayValue: v.displayValue,
+      });
+
+      if (v.status === 'resolved') {
+        resolved++;
+      } else if (v.status === 'resolved-invalid') {
+        invalid.push(v.name);
+      } else if (v.status === 'missing-required') {
+        missing.push(v.name);
+      }
+
+      if (v.declaration.secret) {
+        hasSecrets = true;
+      }
+    }
+
+    return {
+      total: this.resolvedEnv.variables.size,
+      resolved,
+      missing,
+      invalid,
+      hasSecrets,
+      isComplete: this.resolvedEnv.isComplete,
+      variables,
+    };
+  }
+
+  /**
+   * Show guided setup toast when .deck.env is missing (Feature 006 — T036).
+   */
+  private showEnvSetupToast(deck: Deck): void {
+    void vscode.window.showInformationMessage(
+      'This deck requires environment setup',
+      'Set Up Now',
+    ).then((choice) => {
+      if (choice === 'Set Up Now') {
+        void this.runEnvSetup(deck);
+      }
+    });
+  }
+
+  /**
+   * Handle envSetupRequest from webview (Feature 006 — T038).
+   */
+  private async handleEnvSetupRequest(): Promise<void> {
+    if (this.deck) {
+      await this.runEnvSetup(this.deck);
+    }
+  }
+
+  /**
+   * Run guided environment setup: generate template, create .deck.env, open in editor (Feature 006 — T037).
+   */
+  private async runEnvSetup(deck: Deck): Promise<void> {
+    if (!deck.envDeclarations || deck.envDeclarations.length === 0) {
+      return;
+    }
+
+    const deckBasename = path.basename(deck.filePath);
+    const examplePath = deck.filePath.replace(/\.deck\.md$/, '.deck.env.example');
+    const envPath = deck.filePath.replace(/\.deck\.md$/, '.deck.env');
+
+    try {
+      // Generate .deck.env.example if not exists
+      if (!fs.existsSync(examplePath)) {
+        const template = this.envFileLoader.generateTemplate(deck.envDeclarations, deckBasename);
+        fs.writeFileSync(examplePath, template, 'utf-8');
+        this.outputChannel.appendLine(`[Env] Generated template: ${examplePath}`);
+      }
+
+      // Create .deck.env from example if not exists
+      if (!fs.existsSync(envPath)) {
+        fs.copyFileSync(examplePath, envPath);
+        this.outputChannel.appendLine(`[Env] Created env file: ${envPath}`);
+      }
+
+      // Open .deck.env in editor
+      const doc = await vscode.workspace.openTextDocument(envPath);
+      await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
+
+      void vscode.window.showInformationMessage(
+        'Fill in the values for your environment variables',
+      );
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.outputChannel.appendLine(`[Env] Setup failed: ${msg}`);
+      void vscode.window.showErrorMessage(`Environment setup failed: ${msg}`);
+    }
+  }
+
+  /**
+   * Start watching .deck.env file for changes (Feature 006 — T039).
+   * 500ms debounce, re-parses and re-resolves env, updates webview.
+   */
+  private startEnvFileWatcher(deck: Deck): void {
+    // Dispose existing watcher
+    this.disposeEnvFileWatcher();
+
+    const deckDir = path.dirname(deck.filePath);
+    const pattern = new vscode.RelativePattern(deckDir, '*.deck.env');
+    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+    const onChange = () => {
+      // Debounce 500ms
+      if (this.envDebounceTimer) {
+        clearTimeout(this.envDebounceTimer);
+      }
+      this.envDebounceTimer = setTimeout(() => {
+        if (!this.deck) {
+          return;
+        }
+        void (async () => {
+          try {
+            await this.resolveEnvironment(this.deck!);
+            const envStatus = this.buildEnvStatus();
+            if (envStatus) {
+              this.webviewProvider.sendEnvStatusChanged({ envStatus });
+            }
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            this.outputChannel.appendLine(`[Env] Watcher re-resolve failed: ${msg}`);
+          }
+        })();
+      }, 500);
+    };
+
+    watcher.onDidChange(onChange);
+    watcher.onDidCreate(onChange);
+    watcher.onDidDelete(onChange);
+
+    this.envFileWatcher = watcher;
+    this.disposables.push(watcher);
+  }
+
+  /**
+   * Dispose the env file watcher and debounce timer (Feature 006 — T040).
+   */
+  private disposeEnvFileWatcher(): void {
+    if (this.envDebounceTimer) {
+      clearTimeout(this.envDebounceTimer);
+      this.envDebounceTimer = undefined;
+    }
+    if (this.envFileWatcher) {
+      this.envFileWatcher.dispose();
+      this.envFileWatcher = undefined;
+    }
   }
 
   /**

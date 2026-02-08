@@ -11,6 +11,8 @@ import {
   findActionBlocks,
   ACTION_SCHEMAS,
   ActionBlockRange,
+  ENV_DECLARATION_SCHEMA,
+  VALIDATION_RULES,
 } from './actionSchema';
 import { ActionType } from '../models/action';
 
@@ -45,6 +47,12 @@ export class ActionHoverProvider {
     const scenesHover = this.provideScenesHover(document, position);
     if (scenesHover) {
       return scenesHover;
+    }
+
+    // Check if cursor is inside frontmatter env block (Feature 006 — T045)
+    const envHover = this.provideEnvHover(document, position);
+    if (envHover) {
+      return envHover;
     }
 
     // Find action blocks
@@ -307,6 +315,102 @@ export class ActionHoverProvider {
             end: { line: position.line, character: idx + 5 },
           },
         };
+      }
+    }
+
+    return null;
+  }
+
+  // ─────────────────────────────────────────────────
+  // Env hover (Feature 006 — T045)
+  // ─────────────────────────────────────────────────
+
+  /**
+   * Provide hover for env frontmatter properties and the env: key itself.
+   */
+  private provideEnvHover(
+    document: { lineCount: number; lineAt(line: number): { text: string } },
+    position: { line: number; character: number },
+  ): HoverResult | null {
+    const fm = this.findFrontmatter(document);
+    if (!fm) {
+      return null;
+    }
+    const [fmStart, fmEnd] = fm;
+    if (position.line <= fmStart || position.line >= fmEnd) {
+      return null;
+    }
+
+    const lineText = document.lineAt(position.line).text;
+
+    // Hover on the "env:" key itself
+    const envKeyMatch = lineText.match(/^(env):/);
+    if (envKeyMatch) {
+      const keyStart = 0;
+      const keyEnd = envKeyMatch[1].length;
+      if (position.character >= keyStart && position.character < keyEnd) {
+        const rulesTable = VALIDATION_RULES.map(r => `| \`${r.name}\` | ${r.description} |`).join('\n');
+        return {
+          contents: [
+            '**env** — Environment Variables\n\n' +
+            'An array of environment variable declarations for the deck. ' +
+            'Each entry defines a variable that can be referenced as `{{NAME}}` in action parameters.\n\n' +
+            '**Format**:\n```yaml\nenv:\n  - name: PROJECT_ROOT\n    description: Path to the project\n    required: true\n    validate: directory\n  - name: API_TOKEN\n    secret: true\n```\n\n' +
+            '| Property | Type | Required | Description |\n' +
+            '|----------|------|----------|-------------|\n' +
+            ENV_DECLARATION_SCHEMA.map(p =>
+              `| \`${p.name}\` | ${p.type} | ${p.required ? 'yes' : 'no'} | ${p.description.replace(/`/g, '\\`')} |`
+            ).join('\n') +
+            '\n\n**Validation Rules**:\n\n| Rule | Description |\n|------|-------------|\n' + rulesTable,
+          ],
+          range: {
+            start: { line: position.line, character: keyStart },
+            end: { line: position.line, character: keyEnd },
+          },
+        };
+      }
+    }
+
+    // Check if inside env block
+    let inEnvBlock = false;
+    for (let i = position.line; i > fmStart; i--) {
+      if (/^env:\s*$/.test(document.lineAt(i).text)) {
+        inEnvBlock = true;
+        break;
+      }
+      if (i < position.line && /^\S/.test(document.lineAt(i).text) && !/^\s*-\s/.test(document.lineAt(i).text)) {
+        break;
+      }
+    }
+
+    if (!inEnvBlock) {
+      return null;
+    }
+
+    // Match property name on this line
+    const propMatch = lineText.match(/^\s+-?\s*(\w+):/);
+    if (propMatch) {
+      const propName = propMatch[1];
+      const idx = lineText.indexOf(propName);
+      if (position.character >= idx && position.character < idx + propName.length) {
+        const schema = ENV_DECLARATION_SCHEMA.find(p => p.name === propName);
+        if (schema) {
+          let content = `**${schema.name}**: \`${schema.type}\`${schema.required ? ' *(required)*' : ''}\n\n${schema.description}`;
+
+          // For validate, add rule list
+          if (schema.name === 'validate') {
+            content += '\n\n**Available rules**:\n' +
+              VALIDATION_RULES.map(r => `- \`${r.name}\` — ${r.description}`).join('\n');
+          }
+
+          return {
+            contents: [content],
+            range: {
+              start: { line: position.line, character: idx },
+              end: { line: position.line, character: idx + propName.length },
+            },
+          };
+        }
       }
     }
 
