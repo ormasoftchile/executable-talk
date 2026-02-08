@@ -369,3 +369,103 @@ describe('PreflightValidator — Phase 6: Environment Validation', () => {
     expect(report.passed).to.be.true;
   });
 });
+
+/**
+ * Short secret warning tests (T029)
+ * Secret values fewer than 4 characters should trigger a preflight warning.
+ */
+describe('PreflightValidator — Short Secret Warning', () => {
+  let tmpDir: string;
+  let deckFilePath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'short-secret-'));
+    deckFilePath = path.join(tmpDir, 'test.deck.md');
+    fs.writeFileSync(deckFilePath, '---\ntitle: Test\n---\n# Slide 1\n');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('should emit warning for secret variable with value shorter than 4 characters', async () => {
+    const envFilePath = path.join(tmpDir, 'test.deck.env');
+    fs.writeFileSync(envFilePath, 'SHORT_SECRET=ab\n');
+
+    // Create .gitignore to avoid gitignore warning
+    fs.writeFileSync(path.join(tmpDir, '.gitignore'), '*.deck.env\n');
+
+    const declarations: EnvDeclaration[] = [
+      { name: 'SHORT_SECRET', description: 'Short', required: false, secret: true },
+    ];
+    const resolved = buildResolvedEnv([
+      resolvedVar('SHORT_SECRET', {
+        resolvedValue: 'ab',
+        displayValue: '•••••',
+        source: 'env-file',
+        declaration: declarations[0],
+      }),
+    ]);
+
+    const deck = buildDeck(deckFilePath);
+    deck.envDeclarations = declarations;
+
+    const context = buildContext({
+      deck,
+      envDeclarations: declarations,
+      resolvedEnv: resolved,
+    });
+
+    const validator = new PreflightValidator();
+    const report = await validator.validate(context);
+
+    const shortWarning = report.issues.find(
+      i =>
+        i.source === 'env' &&
+        i.severity === 'warning' &&
+        i.message.includes('SHORT_SECRET') &&
+        i.message.toLowerCase().includes('short'),
+    );
+    expect(shortWarning).to.not.be.undefined;
+    expect(shortWarning!.message).to.include('masking');
+  });
+
+  it('should not emit short secret warning for values 4+ characters', async () => {
+    const envFilePath = path.join(tmpDir, 'test.deck.env');
+    fs.writeFileSync(envFilePath, 'NORMAL_SECRET=abcdefgh\n');
+
+    fs.writeFileSync(path.join(tmpDir, '.gitignore'), '*.deck.env\n');
+
+    const declarations: EnvDeclaration[] = [
+      { name: 'NORMAL_SECRET', description: 'Normal', required: false, secret: true },
+    ];
+    const resolved = buildResolvedEnv([
+      resolvedVar('NORMAL_SECRET', {
+        resolvedValue: 'abcdefgh',
+        displayValue: '•••••',
+        source: 'env-file',
+        declaration: declarations[0],
+      }),
+    ]);
+
+    const deck = buildDeck(deckFilePath);
+    deck.envDeclarations = declarations;
+
+    const context = buildContext({
+      deck,
+      envDeclarations: declarations,
+      resolvedEnv: resolved,
+    });
+
+    const validator = new PreflightValidator();
+    const report = await validator.validate(context);
+
+    const shortWarning = report.issues.find(
+      i =>
+        i.source === 'env' &&
+        i.severity === 'warning' &&
+        i.message.toLowerCase().includes('short'),
+    );
+    expect(shortWarning).to.be.undefined;
+  });
+});

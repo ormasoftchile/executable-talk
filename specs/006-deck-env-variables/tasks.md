@@ -119,15 +119,15 @@
 
 > **Write these tests FIRST — ensure they FAIL before implementation**
 
-- [ ] T028 [P] [US3] Write unit tests for SecretScrubber covering: single secret value replaced with mask (`•••••`); multiple secrets all replaced; longer secrets replaced first (prevent partial replacement artifacts); secret that is a substring of another secret handled correctly; empty secret values skipped (not scrubbed); custom mask string; text with no secrets returns unchanged; case-sensitive matching per env-resolver contract scrubbing scope in `test/unit/env/secretScrubber.test.ts`
-- [ ] T029 [P] [US3] Write unit tests verifying short secret warning: secret value fewer than 4 characters triggers preflight warning "Variable X is very short — masking may over-scrub terminal output" per US3 acceptance scenario 5 in `test/unit/env/envValidator.test.ts` (append to existing test file)
+- [x] T028 [P] [US3] Write unit tests for SecretScrubber covering: single secret value replaced with mask (`•••••`); multiple secrets all replaced; longer secrets replaced first (prevent partial replacement artifacts); secret that is a substring of another secret handled correctly; empty secret values skipped (not scrubbed); custom mask string; text with no secrets returns unchanged; case-sensitive matching per env-resolver contract scrubbing scope in `test/unit/env/secretScrubber.test.ts`
+- [x] T029 [P] [US3] Write unit tests verifying short secret warning: secret value fewer than 4 characters triggers preflight warning "Variable X is very short — masking may over-scrub terminal output" per US3 acceptance scenario 5 in `test/unit/env/envValidator.test.ts` (append to existing test file)
 
 ### Implementation for User Story 3
 
-- [ ] T030 [US3] Implement `SecretScrubber` class with `scrub(text, resolvedEnv, mask?)` that iterates `resolvedEnv.secretValues` (pre-sorted longest first), replaces all occurrences of each secret value in `text` with the mask string (default `'•••••'`), skips empty values, returns scrubbed text per env-resolver contract SecretScrubber interface in `src/env/secretScrubber.ts`
-- [ ] T031 [US3] Wire `SecretScrubber` into Conductor error handling — in `executeAction()` catch block, scrub error message via `secretScrubber.scrub()` before including in `actionStatusChanged` message sent to webview in `src/conductor/conductor.ts`
-- [ ] T032 [US3] Add short secret preflight warning — during `resolveDeclarations()`, if a secret variable's `resolvedValue` has length < 4, add an informational note to `EnvValidationResult` — surface in preflight Phase 6 as warning in `src/env/envResolver.ts` and `src/validation/preflightValidator.ts`
-- [ ] T033 [US3] Export `SecretScrubber` from `src/env/index.ts`
+- [x] T030 [US3] Implement `SecretScrubber` class with `scrub(text, resolvedEnv, mask?)` that iterates `resolvedEnv.secretValues` (pre-sorted longest first), replaces all occurrences of each secret value in `text` with the mask string (default `'•••••'`), skips empty values, returns scrubbed text per env-resolver contract SecretScrubber interface in `src/env/secretScrubber.ts`
+- [x] T031 [US3] Wire `SecretScrubber` into Conductor error handling — in `executeAction()` catch block, scrub error message via `secretScrubber.scrub()` before including in `actionStatusChanged` message sent to webview in `src/conductor/conductor.ts`
+- [x] T032 [US3] Add short secret preflight warning — during `resolveDeclarations()`, if a secret variable's `resolvedValue` has length < 4, add an informational note to `EnvValidationResult` — surface in preflight Phase 6 as warning in `src/env/envResolver.ts` and `src/validation/preflightValidator.ts`
+- [x] T033 [US3] Export `SecretScrubber` from `src/env/index.ts`
 
 **Checkpoint**: Secret values never appear in webview messages. Display path shows `{{VAR}}` for secrets. Error messages are scrubbed. Short secret warning fires. Run T028-T029 tests — all should pass.
 
