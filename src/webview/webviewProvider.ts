@@ -28,7 +28,7 @@ import {
 import { isWebviewMessage, createMessageDispatcher, MessageHandlers } from './messageHandler';
 import { Deck } from '../models/deck';
 import { ActionType } from '../models/action';
-import { renderBlockElements } from '../renderer/blockElementRenderer';
+import { injectBlockElements } from '../renderer/blockElementRenderer';
 import { SequenceErrorDetail } from '../actions/errors';
 
 /**
@@ -419,7 +419,7 @@ export class WebviewProvider implements vscode.Disposable {
       slides: this.currentDeck?.slides.map((slide, index) => {
         return {
           index,
-          content: slide.html + renderBlockElements(slide),
+          content: injectBlockElements(slide.html, slide),
           hasActions: slide.onEnterActions.length > 0 || slide.interactiveElements.length > 0,
           speakerNotes: slide.speakerNotes,
         };

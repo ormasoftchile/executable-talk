@@ -56,8 +56,8 @@ export function parseActionBlocks(
   const elements: InteractiveElement[] = [];
   const errors: ActionBlockParseError[] = [];
 
-  // Track which ranges to strip from content
-  const stripRanges: Array<{ start: number; end: number }> = [];
+  // Track which ranges to strip from content (replaced with placeholders)
+  const stripRanges: Array<{ start: number; end: number; placeholderId: string }> = [];
 
   // Reset regex state for each call
   ACTION_BLOCK_PATTERN.lastIndex = 0;
@@ -74,8 +74,13 @@ export function parseActionBlocks(
     // Calculate 1-based line number of the opening fence
     const lineNumber = content.substring(0, matchStart).split('\n').length;
 
-    // Record range for stripping
-    stripRanges.push({ start: matchStart, end: matchEnd });
+    // Placeholder ID matches the element ID that will be created
+    const currentBlockIndex = blockIndex;
+    blockIndex++;
+    const placeholderId = `block-${slideIndex}-${currentBlockIndex}`;
+
+    // Record range for stripping (replaced with placeholder in cleaned content)
+    stripRanges.push({ start: matchStart, end: matchEnd, placeholderId });
 
     // Handle empty YAML
     if (!rawYaml.trim()) {
@@ -179,7 +184,7 @@ export function parseActionBlocks(
 
     // Create InteractiveElement
     const element: InteractiveElement = {
-      id: `block-${slideIndex}-${blockIndex}`,
+      id: `block-${slideIndex}-${currentBlockIndex}`,
       label,
       action,
       position,
@@ -188,7 +193,6 @@ export function parseActionBlocks(
     };
 
     elements.push(element);
-    blockIndex++;
   }
 
   // Build cleaned content by removing action blocks
@@ -198,23 +202,26 @@ export function parseActionBlocks(
 }
 
 /**
- * Remove the matched action block ranges from content.
+ * Remove the matched action block ranges from content, inserting HTML comment
+ * placeholders so the action buttons can later be rendered in-position.
  * Preserves surrounding content and collapses excess blank lines.
  */
 function buildCleanedContent(
   content: string,
-  stripRanges: Array<{ start: number; end: number }>
+  stripRanges: Array<{ start: number; end: number; placeholderId: string }>
 ): string {
   if (stripRanges.length === 0) {
     return content;
   }
 
-  // Build content by concatenating non-stripped segments
+  // Build content by concatenating non-stripped segments with placeholders
   let result = '';
   let cursor = 0;
 
   for (const range of stripRanges) {
     result += content.substring(cursor, range.start);
+    // Insert a placeholder that markdown-it will pass through as raw HTML
+    result += `<!--ACTION:${range.placeholderId}-->`;
     cursor = range.end;
   }
 

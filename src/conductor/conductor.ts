@@ -18,7 +18,7 @@ import { PresenterViewProvider } from '../webview/presenterViewProvider';
 import { getActionRegistry } from '../actions/registry';
 import { isTrusted, onTrustChanged } from '../utils/workspaceTrust';
 import { enterZenMode, exitZenMode, resetZenModeState } from '../utils/zenMode';
-import { parseRenderDirectives, resolveDirective, createLoadingPlaceholder, formatAsCommandBlock, renderCommand, StreamCallback, renderBlockElements } from '../renderer';
+import { parseRenderDirectives, resolveDirective, createLoadingPlaceholder, formatAsCommandBlock, renderCommand, StreamCallback, injectBlockElements } from '../renderer';
 import { parseDeck } from '../parser';
 import { PreflightValidator } from '../validation/preflightValidator';
 import { ValidationReport, ValidationIssue } from '../validation/types';
@@ -798,13 +798,13 @@ export class Conductor implements vscode.Disposable {
   private handleReady(): void {
     if (this.deck) {
       const firstSlide = this.deck.slides[0];
-      const firstSlideBlockHtml = firstSlide ? renderBlockElements(firstSlide) : '';
+      const firstSlideHtml = firstSlide ? injectBlockElements(firstSlide.html, firstSlide) : '';
       this.webviewProvider.sendDeckLoaded({
         title: this.deck.title,
         author: this.deck.author,
         totalSlides: this.deck.slides.length,
         currentSlideIndex: 0,
-        slideHtml: (firstSlide?.html ?? '') + firstSlideBlockHtml,
+        slideHtml: firstSlideHtml,
         speakerNotes: firstSlide?.speakerNotes,
         interactiveElements: firstSlide?.interactiveElements.map(el => ({
           id: el.id,
@@ -1229,17 +1229,15 @@ export class Conductor implements vscode.Disposable {
    * Uses progressive loading: sends slide with placeholders first, then resolves async
    */
   private resolveSlideRenderDirectives(slide: Slide): string {
-    const blockHtml = renderBlockElements(slide);
-
-    // If no render directives, return original HTML + block elements
+    // If no render directives, return HTML with block elements injected at placeholder positions
     if (!slide.renderDirectives || slide.renderDirectives.length === 0) {
-      return slide.html + blockHtml;
+      return injectBlockElements(slide.html, slide);
     }
 
     // Parse the full directives from raw content
     const directives = parseRenderDirectives(slide.content, slide.index);
     if (directives.length === 0) {
-      return slide.html + blockHtml;
+      return injectBlockElements(slide.html, slide);
     }
 
     // First pass: replace directive links with loading placeholders
@@ -1269,7 +1267,7 @@ export class Conductor implements vscode.Disposable {
     // Schedule async resolution of directives (don't await - let the slide show immediately)
     void this.resolveDirectivesAsync(directives);
 
-    return html + blockHtml;
+    return injectBlockElements(html, slide);
   }
 
   /**

@@ -45,4 +45,5 @@ export {
 
 export {
   renderBlockElements,
+  injectBlockElements,
 } from './blockElementRenderer';
