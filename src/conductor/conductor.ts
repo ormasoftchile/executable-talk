@@ -20,7 +20,7 @@ import { parseRenderDirectives, resolveDirective, createLoadingPlaceholder, form
 import { parseDeck } from '../parser';
 import { PreflightValidator } from '../validation/preflightValidator';
 import { ValidationReport, ValidationIssue } from '../validation/types';
-import { EnvFileLoader, EnvResolver } from '../env';
+import { EnvFileLoader, EnvResolver, SecretScrubber } from '../env';
 
 /**
  * Actions that require workspace trust
@@ -46,6 +46,7 @@ export class Conductor implements vscode.Disposable {
   private cancellationTokenSource: vscode.CancellationTokenSource | undefined;
   private envFileLoader: EnvFileLoader;
   private envResolver: EnvResolver;
+  private secretScrubber: SecretScrubber;
   private resolvedEnv: ResolvedEnv | undefined;
 
   constructor(extensionUri: vscode.Uri) {
@@ -64,6 +65,7 @@ export class Conductor implements vscode.Disposable {
     // Env resolution dependencies (Feature 006)
     this.envFileLoader = new EnvFileLoader();
     this.envResolver = new EnvResolver();
+    this.secretScrubber = new SecretScrubber();
 
     // Listen for workspace trust changes
     this.disposables.push(
@@ -901,10 +903,14 @@ export class Conductor implements vscode.Disposable {
         }
       } else {
         // Forward rich error detail for toast display (per error-feedback contract, T030)
+        // Scrub secret values from error messages before sending to webview (T031)
+        const scrubbedError = this.resolvedEnv
+          ? this.secretScrubber.scrub(result.error ?? '', this.resolvedEnv)
+          : result.error;
         this.webviewProvider.sendActionStatusChanged(
           statusId,
           'failed',
-          result.error,
+          scrubbedError,
           {
             actionType: result.actionType ?? action.type,
             actionTarget: result.actionTarget,
@@ -913,10 +919,15 @@ export class Conductor implements vscode.Disposable {
         );
       }
     } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : 'Unknown error';
+      // Scrub secret values from catch-block error messages (T031)
+      const scrubbedMessage = this.resolvedEnv
+        ? this.secretScrubber.scrub(rawMessage, this.resolvedEnv)
+        : rawMessage;
       this.webviewProvider.sendActionStatusChanged(
         statusId,
         'failed',
-        error instanceof Error ? error.message : 'Unknown error'
+        scrubbedMessage
       );
     }
   }

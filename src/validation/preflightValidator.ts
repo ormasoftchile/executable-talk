@@ -236,6 +236,21 @@ export class PreflightValidator {
             slideIndex: -1,
           });
         }
+
+        // 6c.1: Short secret warning (T032)
+        if (
+          variable.declaration.secret &&
+          variable.status === 'resolved' &&
+          variable.resolvedValue &&
+          variable.resolvedValue.length < 4
+        ) {
+          issues.push({
+            severity: 'warning',
+            message: `Variable '${name}' is very short — masking may over-scrub terminal output`,
+            source: 'env',
+            slideIndex: -1,
+          });
+        }
       }
     }
 
