@@ -140,9 +140,8 @@ A single resolved environment variable with its display and execution values.
 
 | Value | Meaning |
 |-------|---------|
-| `'resolved'` | Value present and valid |
+| `'resolved'` | Value present and valid (from `.deck.env` or `default`; check `source` field to distinguish) |
 | `'resolved-invalid'` | Value present but fails validation rule |
-| `'default'` | Using fallback `default` value from declaration |
 | `'missing-optional'` | Optional variable not provided, resolved to empty string |
 | `'missing-required'` | Required variable not provided — error state |
 
@@ -163,7 +162,7 @@ Status summary sent to the webview for display (respects FR-010 — no secret va
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `total` | `number` | Total declared variables |
-| `resolved` | `number` | Variables with `status === 'resolved'` or `'default'` |
+| `resolved` | `number` | Variables with `status === 'resolved'` |
 | `missing` | `string[]` | Names of required variables that are missing |
 | `invalid` | `string[]` | Names of variables that failed validation |
 | `hasSecrets` | `boolean` | Whether any variable is marked `secret: true` |

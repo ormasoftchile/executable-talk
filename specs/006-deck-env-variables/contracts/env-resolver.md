@@ -135,6 +135,21 @@ interface EnvResolver {
   ): ResolvedEnv;
 
   /**
+   * Run validation rules against resolved variables (async I/O).
+   * Updates status to 'resolved-invalid' and sets validationResult on failure.
+   * Must be called AFTER resolveDeclarations() as a separate step.
+   * @param resolved - The ResolvedEnv from resolveDeclarations()
+   * @param envRuleValidator - Validator for rule checks
+   * @param context - Workspace context for file/directory resolution
+   * @returns Updated ResolvedEnv with validation results applied
+   */
+  validateResolved(
+    resolved: ResolvedEnv,
+    envRuleValidator: EnvRuleValidator,
+    context: EnvValidationContext
+  ): Promise<ResolvedEnv>;
+
+  /**
    * Interpolate {{VAR}} placeholders in action params for display in webview.
    * Secret variables remain as {{VAR}} placeholder text.
    * Non-secret variables are replaced with their resolved values.
@@ -162,7 +177,7 @@ interface EnvResolver {
 }
 ```
 
-### resolveDeclarations Algorithm
+### resolveDeclarations Algorithm (synchronous — pure data merge, no I/O)
 
 ```
 For each declaration:
@@ -170,13 +185,11 @@ For each declaration:
   2. If found:
      a. Set source = 'env-file'
      b. Set resolvedValue = envFile value
-     c. Run validation rule if declaration.validate is set
-     d. If valid → status = 'resolved'
-     e. If invalid → status = 'resolved-invalid'
+     c. Set status = 'resolved'
   3. If not found and declaration.default is defined:
      a. Set source = 'default'
      b. Set resolvedValue = declaration.default
-     c. Run validation → status = 'resolved' or 'resolved-invalid'
+     c. Set status = 'resolved'
   4. If not found and no default:
      a. If declaration.required → status = 'missing-required'
      b. If not required → status = 'missing-optional', resolvedValue = ''
@@ -184,6 +197,19 @@ For each declaration:
      a. If declaration.secret and resolvedValue exists → '•••••'
      b. If status starts with 'missing' → '<missing>'
      c. Else → resolvedValue
+```
+
+### validateResolved Algorithm (async — runs validation rules with I/O)
+
+```
+For each variable in resolved.variables:
+  1. If variable.status !== 'resolved': skip (only validate resolved values)
+  2. If variable.declaration.validate is not set: skip
+  3. Call envRuleValidator.validateValue(variable.resolvedValue, variable.declaration.validate, context)
+  4. Set variable.validationResult = result
+  5. If !result.passed → set variable.status = 'resolved-invalid'
+  6. Recompute resolved.isComplete (any required with status !== 'resolved' → false)
+Return updated resolved
 ```
 
 ### Interpolation Algorithm
@@ -273,12 +299,12 @@ interface EnvFileWatcher {
 1. Parse deck (existing)
 2. Extract envDeclarations from frontmatter (NEW)
 3. Load .deck.env file (NEW)
-4. Resolve declarations (NEW)
-5. Run env validation rules (NEW)
-6. Start file watcher (NEW)
-7. Store resolvedEnv in conductor state (NEW)
-8. Send deckLoaded with envStatus (MODIFIED)
-9. Render first slide (existing)
+4a. resolveDeclarations(declarations, envFile)                        → sync merge (NEW)
+4b. await validateResolved(resolvedEnv, envRuleValidator, context)    → async validation (NEW)
+5. Start file watcher (NEW)
+6. Store resolvedEnv in conductor state (NEW)
+7. Send deckLoaded with envStatus (MODIFIED)
+8. Render first slide (existing)
 ```
 
 ### Conductor.executeAction() Flow

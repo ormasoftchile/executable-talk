@@ -3,7 +3,7 @@
 **Feature**: 006-deck-env-variables
 **Date**: 2026-02-08
 **Status**: Draft
-**Covers**: FR-004, FR-007, FR-008, FR-014, FR-015, FR-016
+**Covers**: FR-005, FR-007, FR-008, FR-015, FR-016
 
 ## Overview
 
@@ -168,9 +168,9 @@ async validateEnvironment(context: ValidationContext): Promise<ValidationIssue[]
   if (!envFile.exists && context.envDeclarations.length > 0) {
     issues.push({
       severity: 'warning',
-      message: 'No .deck.env file found. Environment variables will use defaults or be unresolved.',
+      message: 'No .deck.env file found. Environment variables will use defaults or be unresolved. Create .deck.env file alongside your .deck.md file.',
       source: 'env',
-      action: 'Create .deck.env file alongside your .deck.md file'
+      slideIndex: -1
     });
   }
 
@@ -179,20 +179,21 @@ async validateEnvironment(context: ValidationContext): Promise<ValidationIssue[]
     issues.push({
       severity: 'warning',
       message: `Malformed line ${error.line} in .deck.env: ${error.rawText}`,
-      source: 'env'
+      source: 'env',
+      slideIndex: -1
     });
   }
 
-  // 6c: Resolve and validate each variable
-  const resolved = this.envResolver.resolveDeclarations(context.envDeclarations, envFile);
+  // 6c: Use pre-resolved env from context (already resolved + validated in Conductor.openDeck)
+  const resolved = context.resolvedEnv!;
 
   for (const [name, variable] of resolved.variables) {
     if (variable.status === 'missing-required') {
       issues.push({
         severity: 'error',
-        message: `Required environment variable '${name}' is not set in .deck.env`,
+        message: `Required environment variable '${name}' is not set in .deck.env. Add ${name}=<value> to your .deck.env file.`,
         source: 'env',
-        action: `Add ${name}=<value> to your .deck.env file`
+        slideIndex: -1
       });
     }
 
@@ -200,7 +201,8 @@ async validateEnvironment(context: ValidationContext): Promise<ValidationIssue[]
       issues.push({
         severity: 'warning',
         message: `Environment variable '${name}' failed validation: ${variable.validationResult.message}`,
-        source: 'env'
+        source: 'env',
+        slideIndex: -1
       });
     }
   }
@@ -211,9 +213,9 @@ async validateEnvironment(context: ValidationContext): Promise<ValidationIssue[]
     if (!gitignored) {
       issues.push({
         severity: 'warning',
-        message: '.deck.env file is not covered by .gitignore. Secrets may be committed.',
+        message: '.deck.env file is not covered by .gitignore. Secrets may be committed. Add *.deck.env to your .gitignore file.',
         source: 'env',
-        action: 'Add *.deck.env to your .gitignore file'
+        slideIndex: -1
       });
     }
   }
@@ -225,7 +227,8 @@ async validateEnvironment(context: ValidationContext): Promise<ValidationIssue[]
       issues.push({
         severity: 'info',
         message: `Variable '${key}' in .deck.env is not declared in deck frontmatter`,
-        source: 'env'
+        source: 'env',
+        slideIndex: -1
       });
     }
   }
