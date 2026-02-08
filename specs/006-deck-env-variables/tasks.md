@@ -186,12 +186,12 @@
 
 **Purpose**: Webview UI, extension registration, backward compatibility verification
 
-- [ ] T047 [P] Render env status badge in webview — display `Env ✓` (green) when `isComplete`, `Env ⚠` (yellow) with missing/invalid count when not complete, clicking badge sends `envSetupRequest` message to host, handle `envStatusChanged` message to update badge dynamically in `src/webview/assets/presentation.js`
-- [ ] T048 [P] Add CSS styles for env status badge — green/yellow/red variants, positioning in presentation toolbar area, hover tooltip showing variable summary in `src/webview/assets/presentation.css`
-- [ ] T049 Register `.deck.env` FileSystemWatcher creation in `extension.ts` `activate()` — ensure watcher lifecycle is tied to extension activation/deactivation in `src/extension.ts`
-- [ ] T050 [P] Verify backward compatibility — ensure existing decks without `env:` blocks load identically with no behavioral changes, `envDeclarations` defaults to empty array, no env-related messages sent to webview when no declarations exist (SC-006)
-- [ ] T051 Run quickstart.md complete example end-to-end — create test deck and `.deck.env` per quickstart guide, verify all 5 steps work (open project, check node, install deps, create branch, start server) with env variable resolution
-- [ ] T052 [P] Update `package.json` description/keywords to mention environment variables and `.deck.env` support
+- [x] T047 [P] Render env status badge in webview — display `Env ✓` (green) when `isComplete`, `Env ⚠` (yellow) with missing/invalid count when not complete, clicking badge sends `envSetupRequest` message to host, handle `envStatusChanged` message to update badge dynamically in `src/webview/assets/presentation.js`
+- [x] T048 [P] Add CSS styles for env status badge — green/yellow/red variants, positioning in presentation toolbar area, hover tooltip showing variable summary in `src/webview/assets/presentation.css`
+- [x] T049 Register `.deck.env` FileSystemWatcher creation in `extension.ts` `activate()` — ensure watcher lifecycle is tied to extension activation/deactivation in `src/extension.ts`
+- [x] T050 [P] Verify backward compatibility — ensure existing decks without `env:` blocks load identically with no behavioral changes, `envDeclarations` defaults to empty array, no env-related messages sent to webview when no declarations exist (SC-006)
+- [x] T051 Run quickstart.md complete example end-to-end — create test deck and `.deck.env` per quickstart guide, verify all 5 steps work (open project, check node, install deps, create branch, start server) with env variable resolution
+- [x] T052 [P] Update `package.json` description/keywords to mention environment variables and `.deck.env` support
 
 ---
 

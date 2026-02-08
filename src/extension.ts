@@ -232,6 +232,19 @@ export function activate(context: vscode.ExtensionContext): void {
         updateDiagnostics(doc);
     }
 
+    // Watch .deck.env files — re-trigger deck-markdown diagnostics on env file changes (T049)
+    const envFileWatcher = vscode.workspace.createFileSystemWatcher('**/*.deck.env');
+    const refreshDiagnosticsOnEnvChange = () => {
+        for (const doc of vscode.workspace.textDocuments) {
+            if (doc.languageId === 'deck-markdown') {
+                updateDiagnostics(doc);
+            }
+        }
+    };
+    envFileWatcher.onDidChange(refreshDiagnosticsOnEnvChange);
+    envFileWatcher.onDidCreate(refreshDiagnosticsOnEnvChange);
+    envFileWatcher.onDidDelete(refreshDiagnosticsOnEnvChange);
+
     context.subscriptions.push(
         openPresentationDisposable,
         closePresentationDisposable,
@@ -249,6 +262,7 @@ export function activate(context: vscode.ExtensionContext): void {
         onChangeDisposable,
         onOpenDisposable,
         onCloseDisposable,
+        envFileWatcher,
         { dispose() { diagnosticProvider.dispose(); } }
     );
 }
