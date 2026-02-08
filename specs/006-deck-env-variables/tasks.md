@@ -25,9 +25,9 @@
 
 **Purpose**: Create directory structure and type definitions needed by all user stories
 
-- [ ] T001 Create directory structure: `src/env/`, `test/unit/env/`, `test/unit/validation/envRuleValidator/`
-- [ ] T002 [P] Define `EnvDeclaration`, `EnvFile`, `EnvFileError`, `ResolvedEnv`, `ResolvedVar`, `ResolvedVarStatus` (4 values: `'resolved'`, `'resolved-invalid'`, `'missing-optional'`, `'missing-required'`), `EnvValidationResult`, `EnvValidationContext`, `EnvStatus`, `EnvStatusEntry` types and interfaces per data-model.md entity tables in `src/models/env.ts`
-- [ ] T003 [P] Export all new types from `src/models/index.ts`
+- [x] T001 Create directory structure: `src/env/`, `test/unit/env/`, `test/unit/validation/envRuleValidator/`
+- [x] T002 [P] Define `EnvDeclaration`, `EnvFile`, `EnvFileError`, `ResolvedEnv`, `ResolvedVar`, `ResolvedVarStatus` (4 values: `'resolved'`, `'resolved-invalid'`, `'missing-optional'`, `'missing-required'`), `EnvValidationResult`, `EnvValidationContext`, `EnvStatus`, `EnvStatusEntry` types and interfaces per data-model.md entity tables in `src/models/env.ts`
+- [x] T003 [P] Export all new types from `src/models/index.ts`
 
 ---
 
