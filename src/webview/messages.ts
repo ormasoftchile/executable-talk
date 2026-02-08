@@ -6,6 +6,7 @@
 
 import { ActionStatus, ActionType } from '../models/action';
 import { NavigationHistoryBreadcrumb } from '../models/deck';
+import { EnvStatus } from '../models/env';
 import { SequenceErrorDetail } from '../actions/errors';
 
 // ============================================================================
@@ -135,7 +136,8 @@ export type WebviewToHostMessage =
   | GoBackMessage
   | SaveSceneMessage
   | RestoreSceneMessage
-  | DeleteSceneMessage;
+  | DeleteSceneMessage
+  | EnvSetupRequestMessage;
 
 // ============================================================================
 // Extension Host → Webview Messages
@@ -202,6 +204,8 @@ export interface DeckLoadedMessage {
       label: string;
       actionType: string;
     }>;
+    /** Environment variable status (Feature 006) */
+    envStatus?: EnvStatus;
   };
 }
 
@@ -308,6 +312,24 @@ export interface WarningMessage {
 }
 
 /**
+ * Environment variable status changed notification (Feature 006).
+ */
+export interface EnvStatusChangedMessage {
+  type: 'envStatusChanged';
+  payload: {
+    envStatus: EnvStatus;
+  };
+}
+
+/**
+ * Webview requests env setup assistance (Feature 006).
+ */
+export interface EnvSetupRequestMessage {
+  type: 'envSetupRequest';
+  payload: Record<string, never>;
+}
+
+/**
  * Union of all Host → Webview messages
  */
 export type HostToWebviewMessage =
@@ -321,7 +343,8 @@ export type HostToWebviewMessage =
   | OpenScenePickerMessage
   | OpenSceneNameInputMessage
   | SceneChangedMessage
-  | WarningMessage;
+  | WarningMessage
+  | EnvStatusChangedMessage;
 
 // ============================================================================
 // Payload types for convenience
@@ -338,6 +361,7 @@ export type OpenScenePickerPayload = OpenScenePickerMessage['payload'];
 export type OpenSceneNameInputPayload = OpenSceneNameInputMessage['payload'];
 export type SceneChangedPayload = SceneChangedMessage['payload'];
 export type WarningPayload = WarningMessage['payload'];
+export type EnvStatusChangedPayload = EnvStatusChangedMessage['payload'];
 export type SaveScenePayload = SaveSceneMessage['payload'];
 export type RestoreScenePayload = RestoreSceneMessage['payload'];
 export type DeleteScenePayload = DeleteSceneMessage['payload'];

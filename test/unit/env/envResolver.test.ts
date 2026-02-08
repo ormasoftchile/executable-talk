@@ -214,4 +214,154 @@ describe('EnvResolver', () => {
       expect(v.source).to.equal('env-file');
     });
   });
+
+  // ==========================================================================
+  // T011 — interpolateForDisplay + interpolateForExecution
+  // ==========================================================================
+
+  describe('interpolateForDisplay', () => {
+    it('should replace non-secret variable with display value', () => {
+      const declarations = [makeDeclaration({ name: 'PROJECT_ROOT' })];
+      const envFile = makeEnvFile({ PROJECT_ROOT: '/home/user/myapp' });
+      const resolved = resolver.resolveDeclarations(declarations, envFile);
+
+      const result = resolver.interpolateForDisplay(
+        { command: 'cd {{PROJECT_ROOT}} && npm start' },
+        resolved,
+      );
+
+      expect(result.command).to.equal('cd /home/user/myapp && npm start');
+    });
+
+    it('should keep {{VAR}} placeholder for secret variables in display mode', () => {
+      const declarations = [makeDeclaration({ name: 'TOKEN', secret: true })];
+      const envFile = makeEnvFile({ TOKEN: 'super-secret-123' });
+      const resolved = resolver.resolveDeclarations(declarations, envFile);
+
+      const result = resolver.interpolateForDisplay(
+        { command: 'curl -H "Authorization: Bearer {{TOKEN}}" https://api.example.com' },
+        resolved,
+      );
+
+      expect(result.command).to.equal('curl -H "Authorization: Bearer {{TOKEN}}" https://api.example.com');
+    });
+
+    it('should leave unknown {{VAR}} as literal in display mode', () => {
+      const resolved = resolver.resolveDeclarations([], emptyEnvFile());
+
+      const result = resolver.interpolateForDisplay(
+        { path: '{{UNKNOWN_VAR}}/file.txt' },
+        resolved,
+      );
+
+      expect(result.path).to.equal('{{UNKNOWN_VAR}}/file.txt');
+    });
+
+    it('should recursively walk nested objects', () => {
+      const declarations = [makeDeclaration({ name: 'HOST' })];
+      const envFile = makeEnvFile({ HOST: 'localhost' });
+      const resolved = resolver.resolveDeclarations(declarations, envFile);
+
+      const result = resolver.interpolateForDisplay(
+        { config: { server: { host: '{{HOST}}' } } },
+        resolved,
+      );
+
+      expect((result.config as Record<string, Record<string, string>>).server.host).to.equal('localhost');
+    });
+
+    it('should recursively walk arrays', () => {
+      const declarations = [makeDeclaration({ name: 'DIR' })];
+      const envFile = makeEnvFile({ DIR: '/opt' });
+      const resolved = resolver.resolveDeclarations(declarations, envFile);
+
+      const result = resolver.interpolateForDisplay(
+        { args: ['--dir', '{{DIR}}', '--verbose'] },
+        resolved,
+      );
+
+      expect(result.args).to.deep.equal(['--dir', '/opt', '--verbose']);
+    });
+
+    it('should pass non-string primitives through unchanged', () => {
+      const resolved = resolver.resolveDeclarations([], emptyEnvFile());
+
+      const result = resolver.interpolateForDisplay(
+        { count: 42, enabled: true, nothing: null },
+        resolved,
+      );
+
+      expect(result.count).to.equal(42);
+      expect(result.enabled).to.equal(true);
+      expect(result.nothing).to.be.null;
+    });
+
+    it('should handle multiple {{VAR}} references in same string', () => {
+      const declarations = [
+        makeDeclaration({ name: 'HOST' }),
+        makeDeclaration({ name: 'PORT' }),
+      ];
+      const envFile = makeEnvFile({ HOST: 'localhost', PORT: '3000' });
+      const resolved = resolver.resolveDeclarations(declarations, envFile);
+
+      const result = resolver.interpolateForDisplay(
+        { url: 'http://{{HOST}}:{{PORT}}/api' },
+        resolved,
+      );
+
+      expect(result.url).to.equal('http://localhost:3000/api');
+    });
+
+    it('should not touch ${home} platform placeholders', () => {
+      const declarations = [makeDeclaration({ name: 'PROJ' })];
+      const envFile = makeEnvFile({ PROJ: 'myapp' });
+      const resolved = resolver.resolveDeclarations(declarations, envFile);
+
+      const result = resolver.interpolateForDisplay(
+        { path: '${home}/projects/{{PROJ}}' },
+        resolved,
+      );
+
+      expect(result.path).to.equal('${home}/projects/myapp');
+    });
+  });
+
+  describe('interpolateForExecution', () => {
+    it('should replace non-secret variable with real value', () => {
+      const declarations = [makeDeclaration({ name: 'DIR' })];
+      const envFile = makeEnvFile({ DIR: '/usr/src/app' });
+      const resolved = resolver.resolveDeclarations(declarations, envFile);
+
+      const result = resolver.interpolateForExecution(
+        { command: 'cd {{DIR}} && make' },
+        resolved,
+      );
+
+      expect(result.command).to.equal('cd /usr/src/app && make');
+    });
+
+    it('should replace secret variable with real value in execution mode', () => {
+      const declarations = [makeDeclaration({ name: 'API_KEY', secret: true })];
+      const envFile = makeEnvFile({ API_KEY: 'sk-123456' });
+      const resolved = resolver.resolveDeclarations(declarations, envFile);
+
+      const result = resolver.interpolateForExecution(
+        { command: 'export KEY={{API_KEY}}' },
+        resolved,
+      );
+
+      expect(result.command).to.equal('export KEY=sk-123456');
+    });
+
+    it('should leave unknown {{VAR}} as literal in execution mode', () => {
+      const resolved = resolver.resolveDeclarations([], emptyEnvFile());
+
+      const result = resolver.interpolateForExecution(
+        { path: '{{NOPE}}/file' },
+        resolved,
+      );
+
+      expect(result.path).to.equal('{{NOPE}}/file');
+    });
+  });
 });

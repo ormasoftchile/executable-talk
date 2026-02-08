@@ -16,6 +16,7 @@ function makeDeck(slides: Slide[], filePath = '/workspace/test.deck.md'): Deck {
     slides,
     currentSlideIndex: 0,
     metadata: {},
+    envDeclarations: [],
     state: 'active',
   };
 }

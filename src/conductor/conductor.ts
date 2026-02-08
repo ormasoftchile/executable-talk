@@ -4,6 +4,7 @@
 
 import * as vscode from 'vscode';
 import { Deck } from '../models/deck';
+import { EnvStatus, EnvStatusEntry, ResolvedEnv } from '../models/env';
 import { Slide } from '../models/slide';
 import { Action, ActionType } from '../models/action';
 import { StateStack } from './stateStack';
@@ -19,6 +20,7 @@ import { parseRenderDirectives, resolveDirective, createLoadingPlaceholder, form
 import { parseDeck } from '../parser';
 import { PreflightValidator } from '../validation/preflightValidator';
 import { ValidationReport, ValidationIssue } from '../validation/types';
+import { EnvFileLoader, EnvResolver } from '../env';
 
 /**
  * Actions that require workspace trust
@@ -42,6 +44,9 @@ export class Conductor implements vscode.Disposable {
   private validationOutputChannel: vscode.OutputChannel;
   private validationDiagnostics: vscode.DiagnosticCollection;
   private cancellationTokenSource: vscode.CancellationTokenSource | undefined;
+  private envFileLoader: EnvFileLoader;
+  private envResolver: EnvResolver;
+  private resolvedEnv: ResolvedEnv | undefined;
 
   constructor(extensionUri: vscode.Uri) {
     this.stateStack = new StateStack();
@@ -55,6 +60,10 @@ export class Conductor implements vscode.Disposable {
     this.validationOutputChannel = vscode.window.createOutputChannel('Executable Talk Validation');
     this.validationDiagnostics = vscode.languages.createDiagnosticCollection('Executable Talk: Validation');
     this.disposables.push(this.outputChannel, this.validationOutputChannel, this.validationDiagnostics);
+
+    // Env resolution dependencies (Feature 006)
+    this.envFileLoader = new EnvFileLoader();
+    this.envResolver = new EnvResolver();
 
     // Listen for workspace trust changes
     this.disposables.push(
@@ -77,6 +86,9 @@ export class Conductor implements vscode.Disposable {
     this.deck = deck;
     this.deck.state = 'loading';
     this.currentSlideIndex = 0;
+
+    // Resolve environment variables (Feature 006 — T016)
+    await this.resolveEnvironment(deck);
 
     // Load authored scenes from deck frontmatter (T044 [US5])
     if (deck.metadata?.scenes && deck.metadata.scenes.length > 0) {
@@ -776,6 +788,7 @@ export class Conductor implements vscode.Disposable {
           label: el.label,
           actionType: el.action.type,
         })) ?? [],
+        envStatus: this.buildEnvStatus(),
       });
 
       // Show first slide
@@ -853,6 +866,19 @@ export class Conductor implements vscode.Disposable {
     this.cancellationTokenSource = new vscode.CancellationTokenSource();
 
     try {
+      // Env interpolation before executor dispatch (Feature 006 — T019)
+      // {{VAR}} interpolation runs BEFORE platformResolver.expandPlaceholders()
+      let executionAction = action;
+      if (this.resolvedEnv && action.params) {
+        // Display path: for actionStatusChanged messages (secrets masked)
+        // Execution path: for executor (secrets resolved)
+        const execParams = this.envResolver.interpolateForExecution(
+          action.params as Record<string, unknown>,
+          this.resolvedEnv,
+        );
+        executionAction = { ...action, params: execParams as Record<string, string> };
+      }
+
       const context: import('../actions/types').ExecutionContext = {
         workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '',
         deckFilePath: this.deck?.filePath ?? '',
@@ -862,7 +888,7 @@ export class Conductor implements vscode.Disposable {
         outputChannel: this.outputChannel,
       };
 
-      const result = await executor.execute(action, context);
+      const result = await executor.execute(executionAction, context);
 
       if (result.success) {
         this.webviewProvider.sendActionStatusChanged(statusId, 'success');
@@ -956,6 +982,92 @@ export class Conductor implements vscode.Disposable {
     );
 
     return result === 'Proceed';
+  }
+
+  /**
+   * Resolve environment variables for a deck (Feature 006 — T016).
+   * Loads .deck.env, merges with declarations, stores ResolvedEnv.
+   */
+  private async resolveEnvironment(deck: Deck): Promise<void> {
+    if (!deck.envDeclarations || deck.envDeclarations.length === 0) {
+      this.resolvedEnv = undefined;
+      return;
+    }
+
+    try {
+      // Load .deck.env sidecar file
+      const envFile = await this.envFileLoader.loadEnvFile(deck.filePath);
+
+      // Log env file parse errors as warnings
+      for (const err of envFile.errors) {
+        this.outputChannel.appendLine(`[Env] .deck.env line ${err.line}: ${err.message}`);
+      }
+
+      // Synchronous merge (no validation yet)
+      this.resolvedEnv = this.envResolver.resolveDeclarations(
+        deck.envDeclarations,
+        envFile,
+      );
+
+      // Log resolution status
+      const status = this.buildEnvStatus();
+      if (status) {
+        this.outputChannel.appendLine(
+          `[Env] Resolved ${status.resolved}/${status.total} variables` +
+          (status.missing.length > 0 ? ` (${status.missing.length} missing)` : '') +
+          (status.hasSecrets ? ' [has secrets]' : '')
+        );
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown env resolution error';
+      this.outputChannel.appendLine(`[Env] Resolution failed: ${msg}`);
+      this.resolvedEnv = undefined;
+    }
+  }
+
+  /**
+   * Build EnvStatus DTO from current resolved env (Feature 006 — T018).
+   */
+  private buildEnvStatus(): EnvStatus | undefined {
+    if (!this.resolvedEnv) {
+      return undefined;
+    }
+
+    const variables: EnvStatusEntry[] = [];
+    let resolved = 0;
+    const missing: string[] = [];
+    const invalid: string[] = [];
+    let hasSecrets = false;
+
+    for (const [, v] of this.resolvedEnv.variables) {
+      variables.push({
+        name: v.name,
+        status: v.status,
+        displayValue: v.displayValue,
+      });
+
+      if (v.status === 'resolved') {
+        resolved++;
+      } else if (v.status === 'resolved-invalid') {
+        invalid.push(v.name);
+      } else if (v.status === 'missing-required') {
+        missing.push(v.name);
+      }
+
+      if (v.declaration.secret) {
+        hasSecrets = true;
+      }
+    }
+
+    return {
+      total: this.resolvedEnv.variables.size,
+      resolved,
+      missing,
+      invalid,
+      hasSecrets,
+      isComplete: this.resolvedEnv.isComplete,
+      variables,
+    };
   }
 
   /**
