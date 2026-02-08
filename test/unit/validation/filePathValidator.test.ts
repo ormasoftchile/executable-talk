@@ -16,6 +16,7 @@ function makeContext(slides: Slide[], workspaceRoot = '/workspace'): ValidationC
     slides,
     currentSlideIndex: 0,
     metadata: {},
+    envDeclarations: [],
     state: 'active',
   };
   return {

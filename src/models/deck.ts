@@ -4,6 +4,7 @@
  */
 
 import { Slide } from './slide';
+import { EnvDeclaration } from './env';
 
 /**
  * Pre-authored scene anchor defined in deck YAML frontmatter.
@@ -96,6 +97,8 @@ export interface Deck {
   state: DeckState;
   /** Error message if state is 'error' */
   error?: string;
+  /** Environment variable declarations from frontmatter (Feature 006) */
+  envDeclarations: EnvDeclaration[];
 }
 
 /**
@@ -114,6 +117,7 @@ export function createDeck(
     currentSlideIndex: 0,
     metadata,
     state: 'active',
+    envDeclarations: [],
   };
 }
 

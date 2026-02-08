@@ -6,6 +6,7 @@
 import matter from 'gray-matter';
 import { Deck, DeckMetadata, SceneDefinition, createDeck } from '../models/deck';
 import { parseSlides, getLastParseWarnings } from './slideParser';
+import { EnvDeclarationParser } from '../env/envDeclarationParser';
 
 /**
  * Parse result with potential errors
@@ -46,7 +47,20 @@ export function parseDeck(content: string, filePath: string): ParseResult {
     // Update metadata with parsed scenes
     const enrichedMetadata = { ...metadata, scenes } as DeckMetadata;
 
+    // Parse env declarations from frontmatter (T015 [US1])
+    let envDeclarations: import('../models/env').EnvDeclaration[] = [];
+    const envWarnings: string[] = [];
+    try {
+      const envParser = new EnvDeclarationParser();
+      envDeclarations = envParser.parseEnvDeclarations(metadata);
+    } catch (envError) {
+      // Non-fatal — deck still loads, warning surfaced
+      const msg = envError instanceof Error ? envError.message : 'Unknown env parse error';
+      envWarnings.push(`[env] ${msg}`);
+    }
+
     const deck = createDeck(filePath, slides, enrichedMetadata);
+    deck.envDeclarations = envDeclarations;
 
     // Collect action block parse warnings (non-fatal)
     const warnings = getLastParseWarnings();
@@ -54,6 +68,11 @@ export function parseDeck(content: string, filePath: string): ParseResult {
     // Add scene parse errors as warnings (non-fatal)
     for (const err of sceneErrors) {
       warnings.push(`[scenes] ${err}`);
+    }
+
+    // Add env parse warnings
+    for (const w of envWarnings) {
+      warnings.push(w);
     }
 
     return { deck, warnings: warnings.length > 0 ? warnings : undefined };
