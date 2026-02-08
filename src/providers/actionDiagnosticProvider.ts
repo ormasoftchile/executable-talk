@@ -18,6 +18,7 @@ import {
   ActionBlockRange,
 } from './actionSchema';
 import { ActionType } from '../models/action';
+import { EnvRuleValidator } from '../validation/envRuleValidator';
 
 /**
  * Diagnostic severity (mirrors vscode.DiagnosticSeverity values).
@@ -65,9 +66,16 @@ export class ActionDiagnosticProvider {
     const blocks = findActionBlocks(document);
     const diagnostics: DiagnosticResult[] = [];
 
+    // Collect declared env variable names from frontmatter
+    const declaredEnvNames = this.extractDeclaredEnvNames(document);
+
     for (const block of blocks) {
       this.validateBlock(block, diagnostics);
+      this.validateEnvReferences(block, declaredEnvNames, diagnostics);
     }
+
+    // Validate env: frontmatter block
+    this.validateEnvFrontmatter(document, diagnostics);
 
     return diagnostics;
   }
@@ -348,6 +356,242 @@ export class ActionDiagnosticProvider {
       severity,
       source: this._source,
     };
+  }
+
+  /**
+   * Extract declared env variable names from YAML frontmatter env: block.
+   */
+  private extractDeclaredEnvNames(
+    document: { lineCount: number; lineAt(line: number): { text: string } },
+  ): Set<string> {
+    const names = new Set<string>();
+    const text = this.getDocumentText(document);
+
+    // Quick check: does it have frontmatter?
+    const fmMatch = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!fmMatch) {
+      return names;
+    }
+
+    try {
+      const fm = yaml.load(fmMatch[1]) as Record<string, unknown>;
+      if (fm && Array.isArray(fm['env'])) {
+        for (const entry of fm['env']) {
+          if (typeof entry === 'object' && entry !== null && typeof (entry as Record<string, unknown>)['name'] === 'string') {
+            names.add((entry as Record<string, unknown>)['name'] as string);
+          }
+        }
+      }
+    } catch {
+      // Ignore frontmatter parse errors — not our responsibility here
+    }
+
+    return names;
+  }
+
+  /**
+   * Check {{VAR}} references in action block params for undeclared env variables.
+   * Diagnostic code: env-undeclared-ref (Warning)
+   */
+  private validateEnvReferences(
+    block: ActionBlockRange,
+    declaredNames: Set<string>,
+    diagnostics: DiagnosticResult[],
+  ): void {
+    // If no env declarations at all, skip (no env: block means {{VAR}} is just literal text)
+    if (declaredNames.size === 0) {
+      return;
+    }
+
+    const lines = block.content.split('\n');
+    const varRefPattern = /\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g;
+
+    for (let i = 0; i < lines.length; i++) {
+      let match: RegExpExecArray | null;
+      varRefPattern.lastIndex = 0;
+      while ((match = varRefPattern.exec(lines[i])) !== null) {
+        const varName = match[1];
+        if (!declaredNames.has(varName)) {
+          const docLine = block.startLine + 1 + i;
+          diagnostics.push(this.createDiagnostic(
+            docLine,
+            match.index,
+            docLine,
+            match.index + match[0].length,
+            `Environment variable '${varName}' referenced but not declared in frontmatter`,
+            DiagnosticSeverity.Warning,
+          ));
+        }
+      }
+    }
+  }
+
+  /**
+   * Validate the env: block in YAML frontmatter for structural issues.
+   * Diagnostic codes: env-duplicate-name, env-invalid-name, env-invalid-rule
+   */
+  private validateEnvFrontmatter(
+    document: { lineCount: number; lineAt(line: number): { text: string } },
+    diagnostics: DiagnosticResult[],
+  ): void {
+    const text = this.getDocumentText(document);
+    const fmMatch = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!fmMatch) {
+      return;
+    }
+
+    let fm: Record<string, unknown>;
+    try {
+      const parsed = yaml.load(fmMatch[1]);
+      if (typeof parsed !== 'object' || parsed === null) {
+        return;
+      }
+      fm = parsed as Record<string, unknown>;
+    } catch {
+      return;
+    }
+
+    if (!Array.isArray(fm['env'])) {
+      return;
+    }
+
+    // Find the line where env: starts in the document (for diagnostic ranges)
+    let envBlockStartLine = -1;
+    for (let i = 0; i < document.lineCount; i++) {
+      if (/^\s*env:\s*$/.test(document.lineAt(i).text)) {
+        envBlockStartLine = i;
+        break;
+      }
+    }
+
+    const envRuleValidator = new EnvRuleValidator();
+    const namePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    const seenNames = new Set<string>();
+
+    for (let idx = 0; idx < (fm['env'] as unknown[]).length; idx++) {
+      const entry = (fm['env'] as unknown[])[idx];
+      if (typeof entry !== 'object' || entry === null) {
+        continue;
+      }
+      const obj = entry as Record<string, unknown>;
+      const name = obj['name'] as string | undefined;
+      const validate = obj['validate'] as string | undefined;
+
+      // Find the line for this entry's "- name:" in the document
+      const entryLine = this.findEnvEntryLine(document, envBlockStartLine, idx);
+
+      // env-invalid-name
+      if (typeof name === 'string' && !namePattern.test(name)) {
+        const line = entryLine >= 0 ? entryLine : (envBlockStartLine >= 0 ? envBlockStartLine : 0);
+        diagnostics.push(this.createDiagnostic(
+          line, 0, line, 100,
+          `Invalid variable name: '${name}' (must match [A-Za-z_][A-Za-z0-9_]*)`,
+          DiagnosticSeverity.Error,
+        ));
+      }
+
+      // env-duplicate-name
+      if (typeof name === 'string' && seenNames.has(name)) {
+        const line = entryLine >= 0 ? entryLine : (envBlockStartLine >= 0 ? envBlockStartLine : 0);
+        diagnostics.push(this.createDiagnostic(
+          line, 0, line, 100,
+          `Duplicate environment variable name: '${name}'`,
+          DiagnosticSeverity.Error,
+        ));
+      }
+      if (typeof name === 'string') {
+        seenNames.add(name);
+      }
+
+      // env-invalid-rule
+      if (typeof validate === 'string' && !envRuleValidator.isValidRule(validate)) {
+        const ruleLine = this.findEnvPropertyLine(document, envBlockStartLine, idx, 'validate');
+        const line = ruleLine >= 0 ? ruleLine : (entryLine >= 0 ? entryLine : 0);
+        diagnostics.push(this.createDiagnostic(
+          line, 0, line, 100,
+          `Unknown validation rule: '${validate}'`,
+          DiagnosticSeverity.Error,
+        ));
+      }
+    }
+  }
+
+  /**
+   * Find the document line for the nth env entry's "- name:" line.
+   */
+  private findEnvEntryLine(
+    document: { lineCount: number; lineAt(line: number): { text: string } },
+    envBlockStart: number,
+    entryIndex: number,
+  ): number {
+    if (envBlockStart < 0) {
+      return -1;
+    }
+    let count = -1;
+    for (let i = envBlockStart + 1; i < document.lineCount; i++) {
+      const text = document.lineAt(i).text;
+      // End of frontmatter
+      if (/^---/.test(text)) {
+        break;
+      }
+      // Entry start: "  - name:" pattern
+      if (/^\s+-\s/.test(text)) {
+        count++;
+        if (count === entryIndex) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Find the document line for a specific property within the nth env entry.
+   */
+  private findEnvPropertyLine(
+    document: { lineCount: number; lineAt(line: number): { text: string } },
+    envBlockStart: number,
+    entryIndex: number,
+    property: string,
+  ): number {
+    if (envBlockStart < 0) {
+      return -1;
+    }
+    let count = -1;
+    let inTargetEntry = false;
+    for (let i = envBlockStart + 1; i < document.lineCount; i++) {
+      const text = document.lineAt(i).text;
+      if (/^---/.test(text)) {
+        break;
+      }
+      if (/^\s+-\s/.test(text)) {
+        count++;
+        inTargetEntry = count === entryIndex;
+      }
+      if (inTargetEntry && count > entryIndex) {
+        break;
+      }
+      if (inTargetEntry) {
+        const propPattern = new RegExp(`^\\s*${this.escapeRegex(property)}:`);
+        if (propPattern.test(text)) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Get full text from document.
+   */
+  private getDocumentText(
+    document: { lineCount: number; lineAt(line: number): { text: string } },
+  ): string {
+    const lines: string[] = [];
+    for (let i = 0; i < document.lineCount; i++) {
+      lines.push(document.lineAt(i).text);
+    }
+    return lines.join('\n');
   }
 
   /**

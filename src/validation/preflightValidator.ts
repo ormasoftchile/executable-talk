@@ -10,6 +10,10 @@ import { LineRangeValidator } from './lineRangeValidator';
 import { DebugConfigValidator } from './debugConfigValidator';
 import { CommandAvailabilityValidator } from './commandValidator';
 import { PlatformResolver, isPlatformCommandMap } from '../actions/platformResolver';
+import { EnvFileLoader } from '../env/envFileLoader';
+import * as fs from 'fs';
+import * as path from 'path';
+import { exec } from 'child_process';
 
 /**
  * Action types that require workspace trust
@@ -91,6 +95,13 @@ export class PreflightValidator {
     const platformIssues = this.checkPlatformCoverage(context);
     allIssues.push(...platformIssues);
     checksPerformed++;
+
+    // Phase 6: Environment variable validation (Feature 006 — T025)
+    if (context.envDeclarations && context.envDeclarations.length > 0) {
+      const envIssues = await this.validateEnvironment(context);
+      allIssues.push(...envIssues);
+      checksPerformed++;
+    }
 
     return this.buildReport(deck.filePath, startTime, allIssues, checksPerformed, deck.slides.length, actionCount, renderDirectiveCount);
   }
@@ -174,6 +185,125 @@ export class PreflightValidator {
     }
 
     return issues;
+  }
+
+  /**
+   * Phase 6: Environment variable validation (Feature 006 — T025)
+   */
+  private async validateEnvironment(context: ValidationContext): Promise<ValidationIssue[]> {
+    const issues: ValidationIssue[] = [];
+    const envFileLoader = new EnvFileLoader();
+    const deckFilePath = context.deck.filePath;
+    const envFile = await envFileLoader.loadEnvFile(deckFilePath);
+
+    // 6a: Check .deck.env existence
+    if (!envFile.exists && context.envDeclarations!.length > 0) {
+      issues.push({
+        severity: 'warning',
+        message: 'No .deck.env file found. Environment variables will use defaults or be unresolved.',
+        source: 'env',
+        slideIndex: -1,
+      });
+    }
+
+    // 6b: Check .deck.env parse errors
+    for (const error of envFile.errors) {
+      issues.push({
+        severity: 'warning',
+        message: `Malformed line ${error.line} in .deck.env: ${error.rawText}`,
+        source: 'env',
+        slideIndex: -1,
+      });
+    }
+
+    // 6c: Use pre-resolved env from context
+    if (context.resolvedEnv) {
+      for (const [name, variable] of context.resolvedEnv.variables) {
+        if (variable.status === 'missing-required') {
+          issues.push({
+            severity: 'error',
+            message: `Required environment variable '${name}' is not set in .deck.env`,
+            source: 'env',
+            slideIndex: -1,
+          });
+        }
+
+        if (variable.status === 'resolved-invalid' && variable.validationResult) {
+          issues.push({
+            severity: 'warning',
+            message: `Environment variable '${name}' failed validation: ${variable.validationResult.message}`,
+            source: 'env',
+            slideIndex: -1,
+          });
+        }
+      }
+    }
+
+    // 6d: Check .gitignore coverage
+    if (envFile.exists) {
+      const gitignored = await this.checkGitignore(deckFilePath);
+      if (!gitignored) {
+        issues.push({
+          severity: 'warning',
+          message: '.deck.env file is not covered by .gitignore. Secrets may be committed.',
+          source: 'env',
+          slideIndex: -1,
+        });
+      }
+    }
+
+    // 6e: Warn about unused variables in .deck.env
+    const declaredNames = new Set(context.envDeclarations!.map(d => d.name));
+    for (const key of envFile.values.keys()) {
+      if (!declaredNames.has(key)) {
+        issues.push({
+          severity: 'info',
+          message: `Variable '${key}' in .deck.env is not declared in deck frontmatter`,
+          source: 'env',
+          slideIndex: -1,
+        });
+      }
+    }
+
+    return issues;
+  }
+
+  /**
+   * Check if .deck.env is covered by .gitignore.
+   */
+  private async checkGitignore(deckFilePath: string): Promise<boolean> {
+    const envFilePath = deckFilePath.replace(/\.deck\.md$/, '.deck.env');
+
+    // Primary: use git check-ignore
+    try {
+      return await new Promise<boolean>((resolve) => {
+        exec(
+          `git check-ignore -q "${envFilePath}"`,
+          { cwd: path.dirname(deckFilePath) },
+          (error) => {
+            // exit code 0 = ignored, 1 = not ignored
+            resolve(!error);
+          },
+        );
+      });
+    } catch {
+      // Fallback: string search in .gitignore
+      return this.checkGitignoreFallback(deckFilePath);
+    }
+  }
+
+  /**
+   * Fallback .gitignore check — scan for *.deck.env pattern.
+   */
+  private checkGitignoreFallback(deckFilePath: string): boolean {
+    const patterns = ['*.deck.env', '.deck.env', '*.env'];
+    const gitignorePath = path.join(path.dirname(deckFilePath), '.gitignore');
+    try {
+      const content = fs.readFileSync(gitignorePath, 'utf-8');
+      return patterns.some(p => content.includes(p));
+    } catch {
+      return false;
+    }
   }
 
   private buildReport(

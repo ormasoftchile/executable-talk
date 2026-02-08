@@ -346,6 +346,8 @@ export class Conductor implements vscode.Disposable {
           workspaceRoot,
           isTrusted: isTrusted(),
           cancellationToken: token,
+          envDeclarations: this.deck?.envDeclarations,
+          resolvedEnv: this.resolvedEnv,
         });
       }
     );
