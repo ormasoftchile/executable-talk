@@ -13,32 +13,25 @@
 export function processFragments(html: string): { html: string; fragmentCount: number } {
   let fragmentIndex = 0;
   
-  // Replace fragment comments with data attributes on parent element
-  // The comment appears after the element content, so we wrap the preceding content
+  // Single-pass regex that matches ALL fragment-bearing elements (li, p,
+  // h1-h6, div, blockquote) in one sweep so that fragment indices follow
+  // document order.
   //
-  // IMPORTANT: We must NOT use the `s` (dotall) flag — `.*?` must NOT cross
-  // line / tag boundaries, otherwise a fragment comment inside a <p> would be
-  // greedily matched against a preceding <h1> (or any earlier open tag).
-  let processedHtml = html.replace(
-    /(<li[^>]*>)(.*?)(<!--\s*\.fragment(?:\s+([\w-]+))?\s*-->)/g,
-    (_match, openTag: string, content: string, _comment: string, animationType: string | undefined) => {
+  // The content group uses a negative lookahead for block-level closing
+  // tags — `(?!<\/(?:li|p|h[1-6]|div|blockquote)\b)` — to prevent a
+  // match that starts at one element (e.g. <h1>) from extending through
+  // its closing tag into a sibling element's content.  This is more
+  // reliable than the previous approach of omitting the `s` (dotall) flag,
+  // which broke when two elements happened to sit on the same line.
+  const processedHtml = html.replace(
+    /(<(li|p|h[1-6]|div|blockquote)\b[^>]*>)((?:(?!<\/(?:li|p|h[1-6]|div|blockquote)\b)[\s\S])*?)(<!--\s*\.fragment(?:\s+([\w-]+))?\s*-->)/g,
+    (_match, openTag: string, tagName: string, content: string, _comment: string, animationType: string | undefined) => {
       fragmentIndex++;
       const animation = animationType || 'fade';
-      // Add fragment class and data attributes to the li tag
-      const newOpenTag = openTag.replace('<li', `<li class="fragment" data-fragment="${fragmentIndex}" data-fragment-animation="${animation}"`);
-      return `${newOpenTag}${content}`;
-    }
-  );
-  
-  // Also handle other block elements (p, h1-h6, div, blockquote, etc.)
-  // Again, NO `s` flag — we only match within a single line / tag.
-  processedHtml = processedHtml.replace(
-    /(<(?:p|h[1-6]|div|blockquote)[^>]*>)(.*?)(<!--\s*\.fragment(?:\s+([\w-]+))?\s*-->)/g,
-    (_match, openTag: string, content: string, _comment: string, animationType: string | undefined) => {
-      fragmentIndex++;
-      const animation = animationType || 'fade';
-      const tagName = openTag.match(/<(\w+)/)?.[1] || 'p';
-      const newOpenTag = openTag.replace(`<${tagName}`, `<${tagName} class="fragment" data-fragment="${fragmentIndex}" data-fragment-animation="${animation}"`);
+      const newOpenTag = openTag.replace(
+        `<${tagName}`,
+        `<${tagName} class="fragment" data-fragment="${fragmentIndex}" data-fragment-animation="${animation}"`,
+      );
       return `${newOpenTag}${content}`;
     }
   );
