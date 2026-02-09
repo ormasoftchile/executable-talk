@@ -123,4 +123,41 @@ describe('processFragments', () => {
       expect(result.html).to.contain('data-fragment-animation="fade"');
     });
   });
+
+  describe('document order numbering', () => {
+    it('should assign fragment indices in document order when block elements precede list items', () => {
+      // Simulates markdown-it output for a slide where a <p> with a fragment
+      // marker appears before a <ul> with fragment-marked <li> items.
+      const html = `<h1>Title</h1>
+<p>Introduction <!-- .fragment --></p>
+<ul>
+<li>First <!-- .fragment --></li>
+<li>Second <!-- .fragment --></li>
+</ul>`;
+      
+      const result = processFragments(html);
+      
+      // <p> appears first in the document → fragment 1
+      expect(result.html).to.contain('<p class="fragment" data-fragment="1"');
+      // <li> items follow → fragments 2, 3
+      expect(result.html).to.contain('data-fragment="2"');
+      expect(result.html).to.contain('data-fragment="3"');
+      expect(result.fragmentCount).to.equal(3);
+      // <h1> should NOT have a fragment class
+      expect(result.html).to.match(/<h1>Title<\/h1>/);
+    });
+
+    it('should not match a fragment comment across tag boundaries', () => {
+      // Even if <h1> and <p> are on the same line, the regex must not
+      // "steal" the <p>'s fragment comment for the <h1>.
+      const html = `<h1>Heading</h1><p>Content <!-- .fragment --></p>`;
+      
+      const result = processFragments(html);
+      
+      // Only the <p> should be a fragment, not the <h1>
+      expect(result.fragmentCount).to.equal(1);
+      expect(result.html).to.contain('<p class="fragment"');
+      expect(result.html).to.not.contain('<h1 class="fragment"');
+    });
+  });
 });
