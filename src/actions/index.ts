@@ -14,6 +14,9 @@ export { TerminalRunExecutor, disposeAllTerminals } from './terminalRunExecutor'
 export { DebugStartExecutor } from './debugStartExecutor';
 export { SequenceExecutor } from './sequenceExecutor';
 export { VscodeCommandExecutor } from './vscodeCommandExecutor';
+export { ValidateCommandExecutor } from './validateCommandExecutor';
+export { ValidateFileExistsExecutor } from './validateFileExistsExecutor';
+export { ValidatePortExecutor } from './validatePortExecutor';
 
 // Pipeline
 export { executeWithPipeline, actionRequiresTrust, createExecutionContext } from './executionPipeline';
@@ -29,6 +32,9 @@ import { TerminalRunExecutor } from './terminalRunExecutor';
 import { DebugStartExecutor } from './debugStartExecutor';
 import { SequenceExecutor } from './sequenceExecutor';
 import { VscodeCommandExecutor } from './vscodeCommandExecutor';
+import { ValidateCommandExecutor } from './validateCommandExecutor';
+import { ValidateFileExistsExecutor } from './validateFileExistsExecutor';
+import { ValidatePortExecutor } from './validatePortExecutor';
 
 /**
  * Register all action executors
@@ -42,4 +48,7 @@ export function registerAllExecutors(): void {
   registry.register(new DebugStartExecutor());
   registry.register(new SequenceExecutor());
   registry.register(new VscodeCommandExecutor());
+  registry.register(new ValidateCommandExecutor());
+  registry.register(new ValidateFileExistsExecutor());
+  registry.register(new ValidatePortExecutor());
 }

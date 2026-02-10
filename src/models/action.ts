@@ -12,7 +12,10 @@ export type ActionType =
   | 'terminal.run'
   | 'debug.start'
   | 'sequence'
-  | 'vscode.command';
+  | 'vscode.command'
+  | 'validate.command'
+  | 'validate.fileExists'
+  | 'validate.port';
 
 /**
  * Execution status of an action

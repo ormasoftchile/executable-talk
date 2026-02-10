@@ -47,5 +47,32 @@ describe('Layout Directive Plugin', () => {
       expect(result).to.contain(':::center');
       expect(result).to.not.contain('<div');
     });
+
+    it('should transform :::advanced into details/summary', () => {
+      const input = ':::advanced\nSome advanced content\n:::';
+      const result = transformLayoutDirectives(input);
+      expect(result).to.contain('<details class="disclosure-advanced">');
+      expect(result).to.contain('<summary>Advanced</summary>');
+      expect(result).to.contain('</details>');
+      expect(result).to.contain('Some advanced content');
+    });
+
+    it('should transform :::optional with badge', () => {
+      const input = ':::optional\nOptional step content\n:::';
+      const result = transformLayoutDirectives(input);
+      expect(result).to.contain('<div class="step-optional">');
+      expect(result).to.contain('<span class="optional-badge">Optional</span>');
+      expect(result).to.contain('Optional step content');
+      expect(result).to.contain('</div>');
+    });
+
+    it('should handle mixed layout and disclosure directives', () => {
+      const input = ':::columns\n:::left\nText\n:::\n:::right\n:::advanced\nDetails\n:::\n:::\n:::';
+      const result = transformLayoutDirectives(input);
+      expect(result).to.contain('<div class="layout-columns">');
+      expect(result).to.contain('<details class="disclosure-advanced">');
+      expect(result).to.contain('</details>');
+      expect(result).to.contain('</div>');
+    });
   });
 });

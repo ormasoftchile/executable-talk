@@ -2,22 +2,38 @@
  * Markdown-it plugin for layout directives.
  * Transforms :::center, :::columns, :::left, :::right blocks
  * into <div> wrappers with CSS layout classes.
+ * Also handles :::advanced (collapsible details) and :::optional (badge-marked) sections.
  */
 
-const DIRECTIVE_OPEN = /^:::(center|columns|left|right)\s*$/;
+const DIRECTIVE_OPEN = /^:::(center|columns|left|right|advanced|optional)\s*$/;
 const DIRECTIVE_CLOSE = /^:::\s*$/;
 
 /**
  * Valid layout directive names
  */
-type DirectiveName = 'center' | 'columns' | 'left' | 'right';
+type DirectiveName = 'center' | 'columns' | 'left' | 'right' | 'advanced' | 'optional';
 
-const CSS_CLASS_MAP: Record<DirectiveName, string> = {
+const CSS_CLASS_MAP: Record<string, string> = {
   center: 'layout-center',
   columns: 'layout-columns',
   left: 'layout-left',
   right: 'layout-right',
 };
+
+function getOpenTag(name: DirectiveName): string {
+  switch (name) {
+    case 'advanced':
+      return '<details class="disclosure-advanced"><summary>Advanced</summary>';
+    case 'optional':
+      return '<div class="step-optional"><span class="optional-badge">Optional</span>';
+    default:
+      return `<div class="${CSS_CLASS_MAP[name]}">`;
+  }
+}
+
+function getCloseTag(name: DirectiveName): string {
+  return name === 'advanced' ? '</details>' : '</div>';
+}
 
 /**
  * Pre-processes slide markdown to transform layout directives into HTML divs
@@ -50,13 +66,14 @@ export function transformLayoutDirectives(markdown: string): string {
     if (openMatch) {
       const name = openMatch[1] as DirectiveName;
       stack.push(name);
-      result.push(`<div class="${CSS_CLASS_MAP[name]}">`);
+      result.push(getOpenTag(name));
       continue;
     }
 
     if (DIRECTIVE_CLOSE.test(line) && stack.length > 0) {
+      const top = stack[stack.length - 1];
       stack.pop();
-      result.push('</div>');
+      result.push(getCloseTag(top));
       continue;
     }
 
@@ -65,8 +82,9 @@ export function transformLayoutDirectives(markdown: string): string {
 
   // Close any unclosed directives (graceful degradation)
   while (stack.length > 0) {
+    const top = stack[stack.length - 1];
     stack.pop();
-    result.push('</div>');
+    result.push(getCloseTag(top));
   }
 
   return result.join('\n');

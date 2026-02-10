@@ -15,6 +15,8 @@ export interface SlideFrontmatter {
   notes?: string;
   /** Actions to execute when slide becomes active */
   onEnter?: ActionDefinition[];
+  /** Checkpoint identifier for onboarding mode */
+  checkpoint?: string;
   /** Extensible properties */
   [key: string]: unknown;
 }
@@ -73,6 +75,8 @@ export interface Slide {
   renderDirectives: RenderDirectiveRef[];
   /** Number of animated fragments in this slide */
   fragmentCount: number;
+  /** Checkpoint identifier for onboarding mode */
+  checkpoint?: string;
 }
 
 /**
@@ -92,7 +96,8 @@ export function createSlide(
   index: number,
   content: string,
   html: string,
-  frontmatter?: SlideFrontmatter
+  frontmatter?: SlideFrontmatter,
+  checkpoint?: string
 ): Slide {
   return {
     index,
@@ -104,5 +109,6 @@ export function createSlide(
     interactiveElements: [],
     renderDirectives: [],
     fragmentCount: 0,
+    checkpoint: checkpoint ?? (frontmatter?.checkpoint as string | undefined),
   };
 }

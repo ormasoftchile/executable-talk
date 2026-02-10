@@ -24,6 +24,10 @@ import {
   OpenScenePickerPayload,
   SceneChangedPayload,
   WarningPayload,
+  StepStatusChangedPayload,
+  OnboardingStateLoadedPayload,
+  RetryStepPayload,
+  ResetToCheckpointPayload,
 } from './messages';
 import { isWebviewMessage, createMessageDispatcher, MessageHandlers } from './messageHandler';
 import { Deck } from '../models/deck';
@@ -47,6 +51,8 @@ export interface WebviewCallbacks {
   onRestoreScene?(sceneName: string): void;
   onDeleteScene?(sceneName: string): void;
   onEnvSetupRequest?(): void;
+  onRetryStep?(payload: RetryStepPayload): Promise<void>;
+  onResetToCheckpoint?(payload: ResetToCheckpointPayload): Promise<void>;
 }
 
 /**
@@ -250,6 +256,20 @@ export class WebviewProvider implements vscode.Disposable {
   }
 
   /**
+   * Send step status changed message to webview
+   */
+  sendStepStatusChanged(payload: StepStatusChangedPayload): void {
+    this.postMessage({ type: 'stepStatusChanged', payload });
+  }
+
+  /**
+   * Send onboarding state loaded message to webview
+   */
+  sendOnboardingStateLoaded(payload: OnboardingStateLoadedPayload): void {
+    this.postMessage({ type: 'onboardingStateLoaded', payload });
+  }
+
+  /**
    * Check if panel is visible
    */
 
@@ -325,6 +345,12 @@ export class WebviewProvider implements vscode.Disposable {
       },
       onEnvSetupRequest: (_msg: EnvSetupRequestMessage) => {
         this.callbacks?.onEnvSetupRequest?.();
+      },
+      onRetryStep: async (payload: RetryStepPayload) => {
+        await this.callbacks?.onRetryStep?.(payload);
+      },
+      onResetToCheckpoint: async (payload: ResetToCheckpointPayload) => {
+        await this.callbacks?.onResetToCheckpoint?.(payload);
       },
     };
 
@@ -410,6 +436,8 @@ export class WebviewProvider implements vscode.Disposable {
 
     // Get presentation options from metadata
     const options = (this.currentDeck?.metadata?.options ?? {}) as Record<string, unknown>;
+    // Support mode at top-level frontmatter or inside options
+    const deckMode = (options.mode ?? this.currentDeck?.metadata?.mode ?? 'presentation') as string;
     const toolbarConfig = this.getToolbarHtml(options.toolbar as boolean | string[] | undefined);
 
     // Serialize deck for webview
@@ -422,6 +450,7 @@ export class WebviewProvider implements vscode.Disposable {
           content: injectBlockElements(slide.html, slide),
           hasActions: slide.onEnterActions.length > 0 || slide.interactiveElements.length > 0,
           speakerNotes: slide.speakerNotes,
+          checkpoint: slide.checkpoint,
         };
       }),
       options: {
@@ -430,6 +459,7 @@ export class WebviewProvider implements vscode.Disposable {
         fontSize: options.fontSize ?? 'medium',
         theme: options.theme,
         transition: options.transition ?? 'slide',
+        mode: deckMode,
       },
     });
 
@@ -444,6 +474,7 @@ export class WebviewProvider implements vscode.Disposable {
       }
     })();
     const fontSizeClass = `font-${(options.fontSize as string) || 'medium'}`;
+    const modeClass = deckMode === 'onboarding' ? 'mode-onboarding' : 'mode-presentation';
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -454,11 +485,19 @@ export class WebviewProvider implements vscode.Disposable {
   <link href="${cssUri}" rel="stylesheet">
   <title>Presentation</title>
 </head>
-<body class="${themeClass} ${fontSizeClass}">
+<body class="${themeClass} ${fontSizeClass} ${modeClass}">
   <div id="presentation-container">
     <div id="progress-bar" class="hidden"></div>
     <div id="slide-container">
       <div id="slide-content"></div>
+    </div>
+    <div id="onboarding-controls" class="hidden">
+      <div id="step-progress"></div>
+      <div id="step-actions">
+        <button id="btn-retry" class="onboarding-btn hidden" title="Retry this step">🔄 Retry Step</button>
+        <button id="btn-reset" class="onboarding-btn hidden" title="Reset to checkpoint">⏪ Reset to Checkpoint</button>
+      </div>
+      <div id="validation-result" class="hidden"></div>
     </div>
     <nav id="navigation">
       <button id="btn-first" title="First slide (Home)">⏮</button>

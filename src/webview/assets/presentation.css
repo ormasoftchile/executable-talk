@@ -444,6 +444,9 @@ html, body {
 #slide-content a[href^="action:debug.start"]::before { content: '🐛'; }
 #slide-content a[href^="action:sequence"]::before { content: '⏩'; }
 #slide-content a[href^="action:vscode.command"]::before { content: '⚙️'; }
+#slide-content a[href^="action:validate.command"]::before { content: '🔍'; }
+#slide-content a[href^="action:validate.fileExists"]::before { content: '📂'; }
+#slide-content a[href^="action:validate.port"]::before { content: '🔌'; }
 
 #slide-content a[href^="action:"].running::before {
   content: '⏳';
@@ -483,6 +486,63 @@ html, body {
 #slide-content .layout-left,
 #slide-content .layout-right {
   min-width: 0;
+}
+
+/* Progressive Disclosure */
+#slide-content .disclosure-advanced {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin: 1.25rem 0;
+  padding: 0;
+}
+
+#slide-content .disclosure-advanced > summary {
+  cursor: pointer;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-color);
+  opacity: 0.7;
+  list-style: none;
+  user-select: none;
+}
+
+#slide-content .disclosure-advanced > summary::before {
+  content: '▶ ';
+  font-size: 0.7em;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+#slide-content .disclosure-advanced[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+#slide-content .disclosure-advanced > :not(summary) {
+  padding: 0 1rem 0.75rem;
+}
+
+#slide-content .step-optional {
+  position: relative;
+  border-left: 3px solid var(--border-color);
+  padding: 0.75rem 1rem;
+  margin: 1.25rem 0;
+  opacity: 0.85;
+}
+
+#slide-content .optional-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  background-color: var(--border-color);
+  color: var(--fg-color);
+  margin-bottom: 0.5rem;
 }
 
 /* Navigation Bar */
@@ -1687,4 +1747,183 @@ html, body {
 .breadcrumb-trail__back:hover {
   background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
   color: var(--vscode-foreground, #cccccc);
+}
+
+/* ============================================================================
+   Onboarding Mode
+   ============================================================================ */
+
+/* Base onboarding overrides */
+body.mode-onboarding #slide-content {
+  animation: none;
+}
+
+body.mode-onboarding #slide-container {
+  padding: 2rem 3rem;
+  align-items: flex-start;
+}
+
+body.mode-onboarding #slide-content h1 {
+  text-align: left;
+  font-size: 2.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--accent-color);
+  padding-bottom: 0.5rem;
+}
+
+body.mode-onboarding #slide-content h2 {
+  font-size: 1.75rem;
+}
+
+/* Step Progress Bar */
+#onboarding-controls {
+  padding: 0.75rem 2rem;
+  background-color: var(--nav-bg);
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+#onboarding-controls.hidden {
+  display: none;
+}
+
+.onboarding-btn.hidden {
+  display: none;
+}
+
+#validation-result.hidden {
+  display: none;
+}
+
+.step-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.step-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: background-color 0.3s, transform 0.2s;
+}
+
+.step-dot.step-pending {
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-color);
+}
+
+.step-dot.step-active {
+  background-color: var(--accent-color);
+  border: 1px solid var(--accent-color);
+}
+
+.step-dot.step-completed {
+  background-color: var(--success-color);
+  border: 1px solid var(--success-color);
+}
+
+.step-dot.step-failed {
+  background-color: var(--error-color);
+  border: 1px solid var(--error-color);
+}
+
+.step-dot.step-current {
+  transform: scale(1.4);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+}
+
+.step-label {
+  font-size: 0.85rem;
+  color: var(--fg-color);
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+/* Retry / Reset Buttons */
+#step-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.onboarding-btn {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  padding: 0.4rem 0.9rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.onboarding-btn:hover {
+  background-color: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.onboarding-btn:active {
+  transform: translateY(0);
+}
+
+#btn-reset {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--fg-color);
+}
+
+#btn-reset:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Validation Result */
+#validation-result {
+  font-size: 0.9rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+}
+
+.validation-pass {
+  color: var(--success-color);
+}
+
+.validation-fail {
+  color: var(--error-color);
+}
+
+/* Action links in onboarding mode — more prominent */
+body.mode-onboarding #slide-content a[href^="action:"] {
+  padding: 0.65rem 1.25rem;
+  font-size: 1.05rem;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+body.mode-onboarding #slide-content a[href^="action:validate."] {
+  background-color: #2d7d46;
+}
+
+body.mode-onboarding #slide-content a[href^="action:validate."]:hover {
+  background-color: #359952;
+}
+
+/* Light theme onboarding overrides */
+body.theme-light .step-dot.step-pending {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-color: #ccc;
+}
+
+body.theme-light .step-dot.step-current {
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.2);
+}
+
+body.theme-light #btn-reset {
+  color: #333;
+}
+
+body.theme-light #btn-reset:hover {
+  background-color: rgba(0, 0, 0, 0.05);
 }
