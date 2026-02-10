@@ -6,7 +6,7 @@ describe('Layout Directive Plugin', () => {
     it('should transform :::center block', () => {
       const input = ':::center\nBig idea\n:::';
       const result = transformLayoutDirectives(input);
-      expect(result).to.equal('<div class="layout-center">\nBig idea\n</div>');
+      expect(result).to.equal('<div class="layout-center">\n\nBig idea\n\n</div>');
     });
 
     it('should transform :::columns with :::left and :::right', () => {
@@ -30,6 +30,8 @@ describe('Layout Directive Plugin', () => {
       const result = transformLayoutDirectives(input);
       expect(result).to.contain('<div class="layout-center">');
       expect(result).to.contain('</div>');
+      // Blank line after opening tag ensures markdown-it renders inner content
+      expect(result).to.contain('<div class="layout-center">\n\nContent without close');
     });
 
     it('should handle nested directives', () => {
