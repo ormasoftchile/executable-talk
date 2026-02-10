@@ -429,11 +429,20 @@ export class WebviewProvider implements vscode.Disposable {
         showProgress: options.showProgress ?? false,
         fontSize: options.fontSize ?? 'medium',
         theme: options.theme,
+        transition: options.transition ?? 'slide',
       },
     });
 
     // Build theme and fontSize classes
-    const themeClass = options.theme === 'light' ? 'theme-light' : 'theme-dark';
+    const themeClass = (() => {
+      switch (options.theme) {
+        case 'light': return 'theme-light';
+        case 'minimal': return 'theme-minimal';
+        case 'contrast': return 'theme-contrast';
+        case 'dark':
+        default: return 'theme-dark';
+      }
+    })();
     const fontSizeClass = `font-${(options.fontSize as string) || 'medium'}`;
 
     return `<!DOCTYPE html>
@@ -447,6 +456,7 @@ export class WebviewProvider implements vscode.Disposable {
 </head>
 <body class="${themeClass} ${fontSizeClass}">
   <div id="presentation-container">
+    <div id="progress-bar" class="hidden"></div>
     <div id="slide-container">
       <div id="slide-content"></div>
     </div>
