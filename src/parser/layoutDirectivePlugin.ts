@@ -67,12 +67,16 @@ export function transformLayoutDirectives(markdown: string): string {
       const name = openMatch[1] as DirectiveName;
       stack.push(name);
       result.push(getOpenTag(name));
+      // Add blank line after opening tag so markdown-it parses inner content as markdown
+      result.push('');
       continue;
     }
 
     if (DIRECTIVE_CLOSE.test(line) && stack.length > 0) {
       const top = stack[stack.length - 1];
       stack.pop();
+      // Add blank line before closing tag so markdown-it ends the markdown context cleanly
+      result.push('');
       result.push(getCloseTag(top));
       continue;
     }
