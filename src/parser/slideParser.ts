@@ -12,6 +12,7 @@ import { parseRenderDirectives } from '../renderer';
 import { transformLayoutDirectives } from './layoutDirectivePlugin';
 import { injectBlockElementsFromParsed } from '../renderer/blockElementRenderer';
 import { processFragments } from './fragmentProcessor';
+import { extractCheckpoint } from './checkpointParser';
 
 // Initialize markdown-it renderer
 const md = new MarkdownIt({
@@ -107,6 +108,10 @@ function parseSlideContent(index: number, rawContent: string): Slide {
     }
   }
   
+  // Step 1.5: Extract checkpoint before any rendering
+  const { checkpoint, cleanedContent: contentAfterCheckpoint } = extractCheckpoint(content);
+  content = contentAfterCheckpoint;
+
   // Step 2: Parse action blocks (NEW — extracts elements + cleans content)
   const actionBlockResult = parseActionBlocks(content, index);
   const cleanedContent = actionBlockResult.cleanedContent;
@@ -133,7 +138,7 @@ function parseSlideContent(index: number, rawContent: string): Slide {
   html = fragmentHtml;
   
   // Create base slide
-  const slide = createSlide(index, content, html, frontmatter);
+  const slide = createSlide(index, content, html, frontmatter, checkpoint);
   slide.fragmentCount = fragmentCount;
   
   // Step 6: Parse interactive action links from original content (inline links still parsed)

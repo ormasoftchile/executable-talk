@@ -16,6 +16,10 @@
   let currentFragment = 0;  // Current fragment index (0 = no fragments shown)
   let totalFragments = 0;   // Total fragments in current slide
 
+  // Onboarding mode state
+  let onboardingMode = false;
+  let stepStates = [];
+
   // DOM elements
   const slideContent = document.getElementById('slide-content');
   const slideIndicator = document.getElementById('slide-indicator');
@@ -35,6 +39,19 @@
     if (window.deckData) {
       slides = window.deckData.slides || [];
       totalSlides = window.deckData.slideCount || 0;
+
+      onboardingMode = window.deckData.options && window.deckData.options.mode === 'onboarding';
+      if (onboardingMode) {
+        var controls = document.getElementById('onboarding-controls');
+        if (controls) controls.classList.remove('hidden');
+        stepStates = (window.deckData.slides || []).map(function(s, i) {
+          return {
+            slideIndex: i,
+            checkpoint: s.checkpoint,
+            status: i === 0 ? 'active' : 'pending',
+          };
+        });
+      }
     }
 
     // Set up event listeners
@@ -43,6 +60,20 @@
     setupActionLinks();
     setupToolbar();
     setupMessageListener();
+
+    // Wire onboarding retry/reset buttons
+    var retryBtn = document.getElementById('btn-retry');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function() {
+        sendMessage({ type: 'retryStep', payload: { stepIndex: currentSlide } });
+      });
+    }
+    var resetBtn = document.getElementById('btn-reset');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function() {
+        sendMessage({ type: 'resetToCheckpoint', payload: { stepIndex: currentSlide } });
+      });
+    }
 
     // Notify extension we're ready
     sendMessage({ type: 'ready' });
@@ -288,6 +319,14 @@
         case 'envStatusChanged':
           handleEnvStatusChanged(message);
           break;
+
+        case 'stepStatusChanged':
+          handleStepStatusChanged(message);
+          break;
+
+        case 'onboardingStateLoaded':
+          handleOnboardingStateLoaded(message);
+          break;
       }
     });
   }
@@ -439,12 +478,19 @@
 
     // Update navigation buttons
     updateNavigationButtons();
+
+    // Update onboarding UI if active
+    if (onboardingMode) {
+      updateStepProgress(index);
+      updateOnboardingControls(index);
+    }
   }
 
   /**
    * Apply configured transition to slide content
    */
   function applyTransition(el) {
+    if (onboardingMode) return; // No transitions in onboarding mode
     var transition = (window.deckData && window.deckData.options && window.deckData.options.transition) || 'slide';
     el.classList.remove('transition-fade', 'transition-slide');
     void el.offsetWidth; // Force reflow to restart animation
@@ -469,7 +515,11 @@
    * Update slide indicator
    */
   function updateSlideIndicator() {
-    slideIndicator.textContent = `${currentSlide + 1} / ${totalSlides}`;
+    if (onboardingMode) {
+      slideIndicator.textContent = 'Step ' + (currentSlide + 1) + ' of ' + totalSlides;
+    } else {
+      slideIndicator.textContent = (currentSlide + 1) + ' / ' + totalSlides;
+    }
   }
 
   /**
@@ -1588,6 +1638,87 @@
         sendMessage({ type: 'envSetupRequest' });
       });
       badge.dataset.initialized = 'true';
+    }
+  }
+
+  // =========================================================================
+  // Onboarding Mode UI (step progress, controls, validation)
+  // =========================================================================
+
+  function updateStepProgress(currentIndex) {
+    var progressEl = document.getElementById('step-progress');
+    if (!progressEl) return;
+
+    var total = stepStates.length;
+    var html = '<div class="step-progress-bar">';
+    for (var i = 0; i < total; i++) {
+      var step = stepStates[i];
+      var isCurrent = i === currentIndex;
+      var statusClass = 'step-' + step.status;
+      var currentClass = isCurrent ? ' step-current' : '';
+      html += '<div class="step-dot ' + statusClass + currentClass + '" title="Step ' + (i + 1) + '"></div>';
+    }
+    html += '</div>';
+    html += '<div class="step-label">Step ' + (currentIndex + 1) + ' of ' + total + '</div>';
+    progressEl.innerHTML = html;
+  }
+
+  function updateOnboardingControls(currentIndex) {
+    var step = stepStates[currentIndex];
+    var retryBtn = document.getElementById('btn-retry');
+    var resetBtn = document.getElementById('btn-reset');
+    var validationEl = document.getElementById('validation-result');
+
+    if (retryBtn) {
+      retryBtn.classList.toggle('hidden', !step || step.status !== 'failed');
+    }
+    if (resetBtn) {
+      resetBtn.classList.toggle('hidden', !step || !step.checkpoint || step.status !== 'failed');
+    }
+    if (validationEl) {
+      if (step && step.validationResult) {
+        validationEl.classList.remove('hidden');
+        var icon = step.validationResult.passed ? '✅' : '❌';
+        var cls = step.validationResult.passed ? 'pass' : 'fail';
+        validationEl.innerHTML = '<span class="validation-' + cls + '">' + icon + ' ' + escapeHtml(step.validationResult.message) + '</span>';
+      } else {
+        validationEl.classList.add('hidden');
+        validationEl.innerHTML = '';
+      }
+    }
+  }
+
+  function handleStepStatusChanged(message) {
+    var payload = message.payload || message;
+    var stepIndex = payload.stepIndex;
+    var status = payload.status;
+    var validationResult = payload.validationResult;
+
+    if (stepStates[stepIndex]) {
+      stepStates[stepIndex].status = status;
+      if (validationResult) {
+        stepStates[stepIndex].validationResult = validationResult;
+      }
+      if (stepIndex === currentSlide) {
+        updateOnboardingControls(currentSlide);
+      }
+      updateStepProgress(currentSlide);
+    }
+  }
+
+  function handleOnboardingStateLoaded(message) {
+    var payload = message.payload || message;
+    stepStates = (payload.steps || []).map(function(s) {
+      return {
+        slideIndex: s.slideIndex,
+        checkpoint: s.checkpoint,
+        status: s.status,
+        validationResult: undefined,
+      };
+    });
+    if (onboardingMode) {
+      updateStepProgress(currentSlide);
+      updateOnboardingControls(currentSlide);
     }
   }
 

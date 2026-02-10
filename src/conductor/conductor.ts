@@ -23,6 +23,7 @@ import { parseDeck } from '../parser';
 import { PreflightValidator } from '../validation/preflightValidator';
 import { ValidationReport, ValidationIssue } from '../validation/types';
 import { EnvFileLoader, EnvResolver, SecretScrubber } from '../env';
+import { OnboardingStepState, StepStatus, ValidationResult } from '../models/onboarding';
 
 /**
  * Actions that require workspace trust
@@ -52,6 +53,7 @@ export class Conductor implements vscode.Disposable {
   private resolvedEnv: ResolvedEnv | undefined;
   private envFileWatcher: vscode.Disposable | undefined;
   private envDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  private onboardingSteps: OnboardingStepState[] = [];
 
   constructor(extensionUri: vscode.Uri) {
     this.stateStack = new StateStack();
@@ -111,6 +113,17 @@ export class Conductor implements vscode.Disposable {
       this.sceneStore.loadAuthored(deck.metadata.scenes);
     }
 
+    // Initialize onboarding step tracking
+    if (this.isOnboardingMode()) {
+      this.onboardingSteps = deck.slides.map((slide, index) => ({
+        slideIndex: index,
+        checkpoint: slide.checkpoint,
+        status: index === 0 ? 'active' : 'pending' as StepStatus,
+      }));
+    } else {
+      this.onboardingSteps = [];
+    }
+
     // Render slides
     this.renderSlides();
 
@@ -144,6 +157,28 @@ export class Conductor implements vscode.Disposable {
       onRestoreScene: (sceneName) => void this.handleRestoreScene(sceneName),
       onDeleteScene: (sceneName) => this.handleDeleteScene(sceneName),
       onEnvSetupRequest: () => void this.handleEnvSetupRequest(),
+      onRetryStep: async (payload) => {
+        const step = this.onboardingSteps[payload.stepIndex];
+        if (step) {
+          step.status = 'active';
+          step.validationResult = undefined;
+          this.sendStepStatusChanged(payload.stepIndex, 'active');
+          await this.goToSlide(payload.stepIndex);
+        }
+      },
+      onResetToCheckpoint: async (payload) => {
+        const step = this.onboardingSteps[payload.stepIndex];
+        if (step?.checkpoint) {
+          const entry = this.sceneStore.restore(step.checkpoint);
+          if (entry?.snapshot) {
+            await this.snapshotFactory.restorePartial(entry.snapshot);
+          }
+          step.status = 'active';
+          step.validationResult = undefined;
+          this.sendStepStatusChanged(payload.stepIndex, 'active');
+          await this.goToSlide(payload.stepIndex);
+        }
+      },
     };
 
     // Show presentation
@@ -192,6 +227,21 @@ export class Conductor implements vscode.Disposable {
 
     // Sync presenter view if visible
     this.presenterViewProvider.updateSlide(targetIndex);
+
+    // In onboarding mode: auto-save checkpoint and update step status
+    if (this.isOnboardingMode() && this.onboardingSteps.length > 0) {
+      const step = this.onboardingSteps[targetIndex];
+      if (step && step.status === 'pending') {
+        step.status = 'active';
+        this.sendStepStatusChanged(targetIndex, 'active');
+      }
+      if (step?.checkpoint) {
+        try {
+          const cpSnapshot = this.snapshotFactory.capture(targetIndex, `Checkpoint: ${step.checkpoint}`);
+          this.sceneStore.save(step.checkpoint, cpSnapshot, targetIndex);
+        } catch { /* best-effort checkpoint save */ }
+      }
+    }
 
     // Execute onEnter actions if any
     if (slide.onEnterActions && slide.onEnterActions.length > 0) {
@@ -733,6 +783,22 @@ export class Conductor implements vscode.Disposable {
   }
 
   /**
+   * Check if the current deck is in onboarding mode.
+   * Supports mode at top-level frontmatter or inside options.
+   */
+  private isOnboardingMode(): boolean {
+    const meta = this.deck?.metadata;
+    return (meta?.options?.mode ?? (meta as Record<string, unknown>)?.mode) === 'onboarding';
+  }
+
+  /**
+   * Send stepStatusChanged message to Webview (onboarding mode).
+   */
+  private sendStepStatusChanged(stepIndex: number, status: StepStatus, validationResult?: ValidationResult): void {
+    this.webviewProvider.sendStepStatusChanged({ stepIndex, status, validationResult });
+  }
+
+  /**
    * Send sceneChanged message to Webview with current scene list.
    */
   private sendSceneChanged(activeSceneName?: string): void {
@@ -816,6 +882,17 @@ export class Conductor implements vscode.Disposable {
 
       // Show first slide
       void this.goToSlide(0);
+
+      // Send onboarding state if in onboarding mode
+      if (this.isOnboardingMode() && this.onboardingSteps.length > 0) {
+        this.webviewProvider.sendOnboardingStateLoaded({
+          steps: this.onboardingSteps.map(s => ({
+            slideIndex: s.slideIndex,
+            checkpoint: s.checkpoint,
+            status: s.status,
+          })),
+        });
+      }
     }
   }
 
@@ -921,6 +998,26 @@ export class Conductor implements vscode.Disposable {
         if (action.type === 'file.open' && typeof action.params.path === 'string') {
           this.snapshotFactory.trackOpenedEditor(action.params.path);
         }
+
+        // Update onboarding step status on action success
+        if (this.isOnboardingMode()) {
+          const stepIdx = this.currentSlideIndex;
+          const step = this.onboardingSteps[stepIdx];
+          if (step) {
+            if (action.type.startsWith('validate.')) {
+              step.status = 'completed';
+              step.validationResult = {
+                passed: true,
+                message: 'Validation passed',
+                output: result.actionTarget,
+              };
+              this.sendStepStatusChanged(stepIdx, 'completed', step.validationResult);
+            } else {
+              step.status = 'completed';
+              this.sendStepStatusChanged(stepIdx, 'completed');
+            }
+          }
+        }
       } else {
         // Forward rich error detail for toast display (per error-feedback contract, T030)
         // Scrub secret values from error messages before sending to webview (T031)
@@ -937,6 +1034,24 @@ export class Conductor implements vscode.Disposable {
             sequenceDetail: result.sequenceDetail,
           }
         );
+
+        // Update onboarding step status on action failure
+        if (this.isOnboardingMode()) {
+          const stepIdx = this.currentSlideIndex;
+          const step = this.onboardingSteps[stepIdx];
+          if (step) {
+            step.status = 'failed';
+            if (action.type.startsWith('validate.')) {
+              step.validationResult = {
+                passed: false,
+                message: result.error || 'Validation failed',
+              };
+              this.sendStepStatusChanged(stepIdx, 'failed', step.validationResult);
+            } else {
+              this.sendStepStatusChanged(stepIdx, 'failed');
+            }
+          }
+        }
       }
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : 'Unknown error';

@@ -18,6 +18,10 @@ import {
   RestoreSceneMessage,
   DeleteSceneMessage,
   EnvSetupRequestMessage,
+  RetryStepMessage,
+  ResetToCheckpointMessage,
+  RetryStepPayload,
+  ResetToCheckpointPayload,
 } from './messages';
 
 // ============================================================================
@@ -109,6 +113,20 @@ export function isEnvSetupRequestMessage(msg: unknown): msg is EnvSetupRequestMe
 }
 
 /**
+ * Check if message is a retry step message
+ */
+export function isRetryStepMessage(msg: unknown): msg is RetryStepMessage {
+  return isMessage(msg) && msg.type === 'retryStep';
+}
+
+/**
+ * Check if message is a reset to checkpoint message
+ */
+export function isResetToCheckpointMessage(msg: unknown): msg is ResetToCheckpointMessage {
+  return isMessage(msg) && msg.type === 'resetToCheckpoint';
+}
+
+/**
  * Base message type check
  */
 function isMessage(msg: unknown): msg is { type: string } {
@@ -149,6 +167,8 @@ export interface MessageHandlers {
   onRestoreScene?: (message: RestoreSceneMessage) => void | Promise<void>;
   onDeleteScene?: (message: DeleteSceneMessage) => void | Promise<void>;
   onEnvSetupRequest?: (message: EnvSetupRequestMessage) => void | Promise<void>;
+  onRetryStep?: (payload: RetryStepPayload) => Promise<void>;
+  onResetToCheckpoint?: (payload: ResetToCheckpointPayload) => Promise<void>;
 }
 
 /**
@@ -186,6 +206,10 @@ export function createMessageDispatcher(handlers: MessageHandlers) {
         await handlers.onDeleteScene(message);
       } else if (isEnvSetupRequestMessage(message) && handlers.onEnvSetupRequest) {
         await handlers.onEnvSetupRequest(message);
+      } else if (isRetryStepMessage(message) && handlers.onRetryStep) {
+        await handlers.onRetryStep(message.payload);
+      } else if (isResetToCheckpointMessage(message) && handlers.onResetToCheckpoint) {
+        await handlers.onResetToCheckpoint(message.payload);
       } else {
         console.warn('Unhandled message type:', (message as WebviewToHostMessage).type);
       }
@@ -206,6 +230,7 @@ export function parseMessage(data: unknown): WebviewToHostMessage | null {
   const validTypes = [
     'navigate', 'executeAction', 'undo', 'redo', 'close', 'ready', 'vscodeCommand',
     'goBack', 'saveScene', 'restoreScene', 'deleteScene', 'envSetupRequest',
+    'retryStep', 'resetToCheckpoint',
   ];
   if (!validTypes.includes(data.type)) {
     return null;

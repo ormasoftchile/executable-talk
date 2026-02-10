@@ -1,6 +1,6 @@
 /**
  * Action schema definitions for authoring providers and validation
- * Provides static metadata for all 6 action types: required/optional params,
+ * Provides static metadata for all 9 action types: required/optional params,
  * types, descriptions, and completionKind hints.
  *
  * Per data-model.md entity schema and spec.md US4.
@@ -46,7 +46,7 @@ export interface ActionSchema {
 }
 
 /**
- * Static metadata map for all 6 action types.
+ * Static metadata map for all 9 action types.
  * Built once at module load time; used by completion, hover, diagnostic providers
  * and by the action block parser for type/param validation.
  */
@@ -269,6 +269,85 @@ export const ACTION_SCHEMAS: ReadonlyMap<ActionType, ActionSchema> = new Map<Act
           type: 'array',
           required: false,
           description: 'Arguments to pass to the command.',
+        },
+      ],
+    },
+  ],
+  [
+    'validate.command',
+    {
+      type: 'validate.command',
+      description: 'Runs a command and validates its exit code and optional output.',
+      requiresTrust: true,
+      parameters: [
+        {
+          name: 'command',
+          type: 'string',
+          required: true,
+          description: 'Command to execute. Can be a plain string or a platform command map object.',
+        },
+        {
+          name: 'expectOutput',
+          type: 'string',
+          required: false,
+          description: 'Expected substring in command output.',
+        },
+        {
+          name: 'timeout',
+          type: 'number',
+          required: false,
+          description: 'Timeout in ms (default: 30000).',
+        },
+      ],
+    },
+  ],
+  [
+    'validate.fileExists',
+    {
+      type: 'validate.fileExists',
+      description: 'Validates that a file exists (or is absent).',
+      requiresTrust: false,
+      parameters: [
+        {
+          name: 'path',
+          type: 'string',
+          required: true,
+          description: 'Workspace-relative file path to check.',
+          completionKind: 'file',
+        },
+        {
+          name: 'expectMissing',
+          type: 'boolean',
+          required: false,
+          description: 'When true, expects the file to be absent.',
+        },
+      ],
+    },
+  ],
+  [
+    'validate.port',
+    {
+      type: 'validate.port',
+      description: 'Validates that a TCP port is open.',
+      requiresTrust: false,
+      parameters: [
+        {
+          name: 'port',
+          type: 'number',
+          required: true,
+          description: 'TCP port number to check (1–65535).',
+        },
+        {
+          name: 'host',
+          type: 'string',
+          required: false,
+          description: 'Host to connect to (default: localhost).',
+        },
+        {
+          name: 'timeout',
+          type: 'number',
+          required: false,
+          description: 'Connection timeout in ms (default: 5000).',
         },
       ],
     },

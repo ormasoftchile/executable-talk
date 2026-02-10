@@ -123,6 +123,26 @@ export interface DeleteSceneMessage {
 }
 
 /**
+ * Retry the current onboarding step (re-navigate and reset status).
+ */
+export interface RetryStepMessage {
+  type: 'retryStep';
+  payload: {
+    stepIndex: number;
+  };
+}
+
+/**
+ * Reset to the checkpoint saved for a given step.
+ */
+export interface ResetToCheckpointMessage {
+  type: 'resetToCheckpoint';
+  payload: {
+    stepIndex: number;
+  };
+}
+
+/**
  * Union of all Webview → Host messages
  */
 export type WebviewToHostMessage =
@@ -137,7 +157,9 @@ export type WebviewToHostMessage =
   | SaveSceneMessage
   | RestoreSceneMessage
   | DeleteSceneMessage
-  | EnvSetupRequestMessage;
+  | EnvSetupRequestMessage
+  | RetryStepMessage
+  | ResetToCheckpointMessage;
 
 // ============================================================================
 // Extension Host → Webview Messages
@@ -330,6 +352,32 @@ export interface EnvSetupRequestMessage {
 }
 
 /**
+ * A single onboarding step's status has changed.
+ */
+export interface StepStatusChangedMessage {
+  type: 'stepStatusChanged';
+  payload: {
+    stepIndex: number;
+    status: import('../models/onboarding').StepStatus;
+    validationResult?: import('../models/onboarding').ValidationResult;
+  };
+}
+
+/**
+ * Full onboarding state sent on deck load.
+ */
+export interface OnboardingStateLoadedMessage {
+  type: 'onboardingStateLoaded';
+  payload: {
+    steps: Array<{
+      slideIndex: number;
+      checkpoint?: string;
+      status: import('../models/onboarding').StepStatus;
+    }>;
+  };
+}
+
+/**
  * Union of all Host → Webview messages
  */
 export type HostToWebviewMessage =
@@ -344,7 +392,9 @@ export type HostToWebviewMessage =
   | OpenSceneNameInputMessage
   | SceneChangedMessage
   | WarningMessage
-  | EnvStatusChangedMessage;
+  | EnvStatusChangedMessage
+  | StepStatusChangedMessage
+  | OnboardingStateLoadedMessage;
 
 // ============================================================================
 // Payload types for convenience
@@ -365,6 +415,10 @@ export type EnvStatusChangedPayload = EnvStatusChangedMessage['payload'];
 export type SaveScenePayload = SaveSceneMessage['payload'];
 export type RestoreScenePayload = RestoreSceneMessage['payload'];
 export type DeleteScenePayload = DeleteSceneMessage['payload'];
+export type StepStatusChangedPayload = StepStatusChangedMessage['payload'];
+export type OnboardingStateLoadedPayload = OnboardingStateLoadedMessage['payload'];
+export type RetryStepPayload = RetryStepMessage['payload'];
+export type ResetToCheckpointPayload = ResetToCheckpointMessage['payload'];
 
 // ============================================================================
 // Error Codes

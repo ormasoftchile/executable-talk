@@ -56,6 +56,8 @@ export interface PresentationOptions {
   theme?: 'dark' | 'light';
   /** Slide transition style */
   transition?: 'slide' | 'fade';
+  /** Deck mode: standard presentation or guided onboarding */
+  mode?: 'presentation' | 'onboarding';
 }
 
 /**
