@@ -44,6 +44,11 @@ export interface InteractiveElement {
   /** Whether this element came from an inline link or a fenced block.
    *  Defaults to 'inline' for backward compatibility. */
   source?: 'inline' | 'block';
+  /** Fragment animation for this element.
+   *  - `true` or `'fade'` = default fade animation
+   *  - A string like `'slide-up'` = specific animation type
+   *  - `undefined` / `false` = no fragment, immediately visible */
+  fragment?: boolean | string;
 }
 
 /**

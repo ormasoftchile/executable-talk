@@ -94,6 +94,8 @@ export class ActionHoverProvider {
         if (actionType) {
           return this.hoverParameter(actionType, paramName, position.line, paramStart, paramEnd);
         }
+        // Even without a known action type, meta-fields deserve hover
+        return this.hoverMetaField(paramName, position.line, paramStart, paramEnd);
       }
     }
 
@@ -160,7 +162,13 @@ export class ActionHoverProvider {
     }
 
     const param = schema.parameters.find((p) => p.name === paramName);
+
+    // Universal meta-fields (not in per-action schemas)
     if (!param) {
+      const metaHover = this.hoverMetaField(paramName, line, charStart, charEnd);
+      if (metaHover) {
+        return metaHover;
+      }
       return null;
     }
 
@@ -176,6 +184,47 @@ export class ActionHoverProvider {
 
     return {
       contents: [lines.join('\n')],
+      range: {
+        start: { line, character: charStart },
+        end: { line, character: charEnd },
+      },
+    };
+  }
+
+  /**
+   * Build hover for universal meta-fields (label, fragment).
+   */
+  private hoverMetaField(
+    name: string,
+    line: number,
+    charStart: number,
+    charEnd: number,
+  ): HoverResult | null {
+    const META_FIELDS: Record<string, { type: string; description: string }> = {
+      label: {
+        type: 'string',
+        description:
+          'Display text shown on the action button. Overrides the default label derived from the action type.',
+      },
+      fragment: {
+        type: 'boolean | string',
+        description:
+          'When set, the action button is hidden initially and revealed as part of the slide\'s fragment sequence.\n\n' +
+          '- `true` — default fade animation\n' +
+          '- `"fade"` — explicit fade\n' +
+          '- `"slide-up"` — slide up from below\n' +
+          '- `"zoom"` — zoom in\n\n' +
+          'Fragments are revealed in document order alongside other `<!-- .fragment -->` elements.',
+      },
+    };
+
+    const meta = META_FIELDS[name];
+    if (!meta) {
+      return null;
+    }
+
+    return {
+      contents: [`**${name}**: \`${meta.type}\`\n\n${meta.description}`],
       range: {
         start: { line, character: charStart },
         end: { line, character: charEnd },

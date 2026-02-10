@@ -9,6 +9,7 @@ import { Slide, SlideFrontmatter, createSlide } from '../models/slide';
 import { parseActionLinks } from './actionLinkParser';
 import { parseActionBlocks } from './actionBlockParser';
 import { parseRenderDirectives } from '../renderer';
+import { injectBlockElementsFromParsed } from '../renderer/blockElementRenderer';
 import { processFragments } from './fragmentProcessor';
 
 // Initialize markdown-it renderer
@@ -119,7 +120,13 @@ function parseSlideContent(index: number, rawContent: string): Slide {
   // Step 3: Render markdown to HTML (uses cleaned content — no action blocks in output)
   let html = md.render(cleanedContent);
   
-  // Step 4: Process fragments and get count
+  // Step 4: Inject block element buttons into HTML (replaces <!--ACTION:--> placeholders)
+  // This must happen BEFORE fragment processing so that action buttons with
+  // `fragment: true` get fragment indices in document order alongside other
+  // fragment-marked elements.
+  html = injectBlockElementsFromParsed(html, actionBlockResult.elements);
+  
+  // Step 5: Process fragments and get count
   const { html: fragmentHtml, fragmentCount } = processFragments(html);
   html = fragmentHtml;
   
@@ -127,10 +134,10 @@ function parseSlideContent(index: number, rawContent: string): Slide {
   const slide = createSlide(index, content, html, frontmatter);
   slide.fragmentCount = fragmentCount;
   
-  // Step 5: Parse interactive action links from original content (inline links still parsed)
+  // Step 6: Parse interactive action links from original content (inline links still parsed)
   const inlineElements = parseActionLinks(content, index);
   
-  // Step 6: Merge block elements and inline elements into interactiveElements
+  // Step 7: Merge block elements and inline elements into interactiveElements
   slide.interactiveElements = [...actionBlockResult.elements, ...inlineElements];
   
   // Parse render directives from content

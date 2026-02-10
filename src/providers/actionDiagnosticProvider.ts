@@ -161,8 +161,8 @@ export class ActionDiagnosticProvider {
     }
 
     // Check unknown parameters
-    // 'type' and 'label' are universal meta-fields valid on all action blocks
-    const knownKeys = new Set(['type', 'label', ...schema.parameters.map((p) => p.name)]);
+    // 'type', 'label', and 'fragment' are universal meta-fields valid on all action blocks
+    const knownKeys = new Set(['type', 'label', 'fragment', ...schema.parameters.map((p) => p.name)]);
     for (const key of Object.keys(parsed)) {
       if (!knownKeys.has(key)) {
         const keyLine = this.findLineInBlock(block, new RegExp(`^\\s*${this.escapeRegex(key)}:`));
