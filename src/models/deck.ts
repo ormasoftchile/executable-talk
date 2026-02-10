@@ -54,6 +54,8 @@ export interface PresentationOptions {
   fontSize?: 'small' | 'medium' | 'large';
   /** Theme override */
   theme?: 'dark' | 'light';
+  /** Slide transition style */
+  transition?: 'slide' | 'fade';
 }
 
 /**

@@ -113,12 +113,13 @@ body {
   background: var(--vscode-input-background, #3c3c3c);
   border: 1px solid var(--vscode-inputOption-activeBorder, #007acc);
   border-radius: 6px;
-  padding: 16px;
+  padding: 20px 24px;
 }
 
 .notes-content {
-  font-size: 18px;
+  font-size: 1.1rem;
   line-height: 1.7;
+  max-width: 65ch;
   white-space: pre-wrap;
   font-family: var(--vscode-font-family, system-ui);
 }

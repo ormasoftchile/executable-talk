@@ -20,9 +20,8 @@ As a deck author, I want to declare environment variables in my deck's frontmatt
 1. **Given** a deck declares `env: [{ name: PROJECT_ROOT, required: true }]` in frontmatter and uses `{{PROJECT_ROOT}}` in a `terminal.run` action, **When** a `.deck.env` file provides `PROJECT_ROOT=/Users/jane/projects`, **Then** the action executes with the resolved value `/Users/jane/projects` substituted in the command.
 2. **Given** a deck uses `{{DB_PORT}}` in an action parameter, **When** the `.deck.env` file provides `DB_PORT=5432`, **Then** every occurrence of `{{DB_PORT}}` across all action parameters in all slides is resolved to `5432`.
 3. **Given** a deck uses both `{{VAR}}` env placeholders and existing `${home}` platform placeholders, **When** the deck loads, **Then** both placeholder syntaxes are resolved independently and can coexist in the same command string.
-4. **Given** a deck declares an env variable with `required: false` and a `default` value but the `.deck.env` file does not provide it, **When** the deck loads, **Then** the placeholder `{{VAR}}` is replaced with the `default` value.
-5. **Given** a deck declares an env variable with `required: false`, no `default`, and the `.deck.env` file does not provide it, **When** the deck loads, **Then** the placeholder `{{VAR}}` is replaced with an empty string and the deck loads without error.
-6. **Given** resolution happens at deck load time, **When** the presenter views a slide with a `terminal.run` action, **Then** the resolved command (with actual values) is visible on the slide before clicking run.
+4. **Given** a deck declares an env variable but the `.deck.env` file does not provide it and `required` is `false`, **When** the deck loads, **Then** the placeholder `{{VAR}}` is replaced with an empty string and the deck loads without error.
+5. **Given** resolution happens at deck load time, **When** the presenter views a slide with a `terminal.run` action, **Then** the resolved command (with actual values) is visible on the slide before clicking run.
 
 ---
 
@@ -108,7 +107,7 @@ As a deck author, I want autocomplete and hover documentation when writing `env:
 
 ### Functional Requirements
 
-- **FR-001**: System MUST support an `env:` block in deck YAML frontmatter that declares environment variables with properties: `name` (string, required), `description` (string), `required` (boolean, default false), `secret` (boolean, default false), `validate` (string), `default` (string, optional fallback value used when `.deck.env` does not supply the variable).
+- **FR-001**: System MUST support an `env:` block in deck YAML frontmatter that declares environment variables with properties: `name` (string, required), `description` (string), `required` (boolean, default false), `secret` (boolean, default false), `validate` (string).
 - **FR-002**: System MUST load environment variable values from a `.deck.env` sidecar file located alongside the `.deck.md` file, using standard `KEY=VALUE` dotenv format (one per line, `#` comments, blank lines ignored).
 - **FR-003**: System MUST resolve `{{VAR_NAME}}` placeholders in action parameter values at deck load time, replacing them with the corresponding values from the `.deck.env` file.
 - **FR-004**: System MUST coexist with the existing `${home}`, `${pathSep}`, `${shell}`, `${pathDelimiter}` platform placeholders without conflicts.
@@ -123,11 +122,10 @@ As a deck author, I want autocomplete and hover documentation when writing `env:
 - **FR-013**: System MUST provide autocomplete suggestions for `env:` block properties in frontmatter and for `validate` rule values.
 - **FR-014**: System MUST provide hover documentation for env declaration properties in frontmatter.
 - **FR-015**: System MUST show a status indicator (status bar or webview badge) reflecting current environment readiness (all required variables satisfied and valid).
-- **FR-016**: System MUST emit a non-blocking preflight warning if a `.deck.env` file exists but is not covered by a `.gitignore` rule, alerting the user to the risk of committing secrets to version control.
 
 ### Key Entities
 
-- **EnvDeclaration**: A single environment variable requirement declared in frontmatter. Attributes: name, description, required, secret, validate rule, default value.
+- **EnvDeclaration**: A single environment variable requirement declared in frontmatter. Attributes: name, description, required, secret, validate rule.
 - **EnvFile**: A `.deck.env` sidecar file containing `KEY=VALUE` pairs. Associated 1:1 with a `.deck.md` file by naming convention.
 - **EnvFileTemplate**: A `.deck.env.example` file committed to the repository as a starting point for new users. Contains variable names, comments, and placeholder values.
 - **ResolvedEnv**: The runtime collection of resolved environment variables, each carrying a `resolvedValue` (real) and optionally a `maskedValue` (for secrets). Used by the interpolation engine.
@@ -149,13 +147,5 @@ As a deck author, I want autocomplete and hover documentation when writing `env:
 - The `.deck.env` file uses standard dotenv format (`KEY=VALUE`, one per line, `#` for comments). Multiline values, variable expansion (`${OTHER_VAR}`), and `export` prefixes are not supported in the initial implementation.
 - The `{{VAR}}` interpolation syntax was chosen to avoid conflict with the existing `${placeholder}` platform variable syntax. Double-curly-brace is a widely recognized template syntax.
 - Secret masking operates on literal string replacement. It does not protect against encoded forms of the secret (e.g., base64-encoded tokens in output). This is a reasonable first-pass protection for the common case.
-- The `.deck.env` file is expected to be gitignored. The extension emits a preflight warning if `.deck.env` is not covered by `.gitignore`. The `.deck.env.example` template should include a comment recommending the gitignore entry.
+- The `.deck.env` file is expected to be gitignored. The extension does not enforce this but the `.deck.env.example` template should include a comment recommending it.
 - Interpolation applies only to action parameter values (inside `action` blocks and action link query strings), not to Markdown prose content in slides.
-
-## Clarifications
-
-### Session 2026-02-08
-
-- Q: Should EnvDeclaration support a `default` property for optional variables? → A: Yes — add `default` property; if supplied and no `.deck.env` value, use the default; if no default, resolve to empty string.
-- Q: How should the extension handle the risk of `.deck.env` being accidentally committed with secrets? → A: Emit a preflight warning if `.deck.env` is not listed in `.gitignore` (non-blocking, informational).
-- Q: Should `{{VAR}}` interpolation extend to Markdown prose content on slides? → A: No — action parameters only. Prose `{{VAR}}` left as literal text. Keeps implementation surface small and avoids accidental interpolation.

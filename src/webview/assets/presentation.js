@@ -25,6 +25,7 @@
   const btnLast = document.getElementById('btn-last');
   const actionOverlay = document.getElementById('action-overlay');
   const actionStatus = document.getElementById('action-status');
+  const progressBar = document.getElementById('progress-bar');
 
   /**
    * Initialize the presentation
@@ -420,9 +421,7 @@
     const slide = slides[index];
 
     // Animate transition
-    slideContent.style.animation = 'none';
-    slideContent.offsetHeight; // Trigger reflow
-    slideContent.style.animation = 'slideIn 0.3s ease-out';
+    applyTransition(slideContent);
 
     // Update content
     slideContent.innerHTML = slide.content || '';
@@ -434,11 +433,36 @@
     // Start loading timers for any async content
     startLoadingTimers();
 
-    // Update indicator
+    // Update indicator and progress
     updateSlideIndicator();
+    updateProgressBar(currentSlide, totalSlides);
 
     // Update navigation buttons
     updateNavigationButtons();
+  }
+
+  /**
+   * Apply configured transition to slide content
+   */
+  function applyTransition(el) {
+    var transition = (window.deckData && window.deckData.options && window.deckData.options.transition) || 'slide';
+    el.classList.remove('transition-fade', 'transition-slide');
+    void el.offsetWidth; // Force reflow to restart animation
+    el.classList.add('transition-' + transition);
+  }
+
+  /**
+   * Update progress bar width based on current position
+   */
+  function updateProgressBar(currentIndex, total) {
+    if (!progressBar) return;
+    if (window.deckData && window.deckData.options && window.deckData.options.showProgress) {
+      progressBar.classList.remove('hidden');
+      var progress = total > 1 ? (currentIndex / (total - 1)) * 100 : 100;
+      progressBar.style.width = progress + '%';
+    } else {
+      progressBar.classList.add('hidden');
+    }
   }
 
   /**
@@ -486,7 +510,9 @@
       showAllFragments();
     }
     
+    applyTransition(slideContent);
     updateSlideIndicator();
+    updateProgressBar(currentSlide, totalSlides);
     updateNavigationButtons();
 
     // Update breadcrumb trail (T040)

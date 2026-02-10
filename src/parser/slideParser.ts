@@ -9,6 +9,7 @@ import { Slide, SlideFrontmatter, createSlide } from '../models/slide';
 import { parseActionLinks } from './actionLinkParser';
 import { parseActionBlocks } from './actionBlockParser';
 import { parseRenderDirectives } from '../renderer';
+import { transformLayoutDirectives } from './layoutDirectivePlugin';
 import { injectBlockElementsFromParsed } from '../renderer/blockElementRenderer';
 import { processFragments } from './fragmentProcessor';
 
@@ -118,7 +119,8 @@ function parseSlideContent(index: number, rawContent: string): Slide {
   }
   
   // Step 3: Render markdown to HTML (uses cleaned content — no action blocks in output)
-  let html = md.render(cleanedContent);
+  const layoutTransformed = transformLayoutDirectives(cleanedContent);
+  let html = md.render(layoutTransformed);
   
   // Step 4: Inject block element buttons into HTML (replaces <!--ACTION:--> placeholders)
   // This must happen BEFORE fragment processing so that action buttons with
