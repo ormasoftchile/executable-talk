@@ -19,6 +19,12 @@ Transform your Markdown presentations into live coding demonstrations with VS Co
 - **Environment Variables**: Parameterize decks with `{{VAR}}` placeholders and `.deck.env` sidecar files for portable onboarding decks
 - **Secret Masking**: Mark variables as `secret` to prevent tokens and credentials from appearing on screen
 - **Workspace Trust**: Actions that execute code require Workspace Trust for security
+- **Themes**: Five built-in themes (dark, light, minimal, contrast) with presentation-grade typography
+- **Layout Directives**: Center content and create two-column layouts with `:::center` and `:::columns`
+- **Slide Transitions**: Configurable fade or slide animations between slides
+- **Onboarding Mode**: Step-by-step guided experiences with checkpoints, validation, and retry/reset
+- **Validation Actions**: Verify setup with `validate.command`, `validate.fileExists`, and `validate.port`
+- **Progressive Disclosure**: Collapsible `:::advanced` sections and `:::optional` non-blocking content
 
 ## Getting Started
 
@@ -215,6 +221,60 @@ Executes any VS Code command. **Requires Workspace Trust.**
 
 [Open Keyboard Shortcuts](action:vscode.command?id=workbench.action.openGlobalKeybindings)
 ```
+
+### `validate.command`
+
+Runs a command and checks its exit code. Optionally checks output content. **Requires Workspace Trust.**
+
+````markdown
+```action
+type: validate.command
+command: node --version
+expectOutput: "v"
+label: Validate Node.js
+```
+````
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `command` | Command to execute (string or platform map) | Yes |
+| `expectOutput` | Substring that must appear in stdout | No |
+| `timeout` | Timeout in milliseconds | No (default: 30000) |
+
+### `validate.fileExists`
+
+Checks whether a file exists (or is absent).
+
+````markdown
+```action
+type: validate.fileExists
+path: package.json
+label: Check package.json
+```
+````
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `path` | Relative or absolute file path | Yes |
+| `expectMissing` | Set `true` to check file does NOT exist | No (default: false) |
+
+### `validate.port`
+
+Checks whether a TCP port is open.
+
+````markdown
+```action
+type: validate.port
+port: 3000
+label: Check dev server
+```
+````
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `port` | Port number (1–65535) | Yes |
+| `host` | Hostname to check | No (default: localhost) |
+| `timeout` | Connection timeout in ms | No (default: 5000) |
 
 ## Dynamic Content Rendering
 
@@ -703,6 +763,48 @@ Specify an animation style after `.fragment`:
 
 Fragments work on list items, paragraphs, headings, and block elements. The syntax is compatible with [Reveal.js](https://revealjs.com/fragments/).
 
+## Layout Directives
+
+Optional Markdown-compatible layout helpers for structuring slide content. These degrade gracefully in plain Markdown viewers.
+
+### Centered Content
+
+```markdown
+:::center
+**Big idea goes here**
+:::
+```
+
+### Two-Column Layout
+
+```markdown
+:::columns
+
+:::left
+Text and explanations
+
+:::
+
+:::right
+Code samples and diagrams
+
+:::
+
+:::
+```
+
+### Progressive Disclosure
+
+```markdown
+:::advanced
+Collapsible content for advanced users (renders as `<details>`)
+:::
+
+:::optional
+Non-blocking optional content with a visual badge
+:::
+```
+
 ## Speaker Notes
 
 Add speaker notes to any slide using the `notes` field in YAML frontmatter:
@@ -737,7 +839,7 @@ options:
   showSlideNumbers: true           # Show slide numbers (default: true)
   showProgress: false              # Show progress bar (default: false)
   fontSize: medium                 # Font size: small, medium, large
-  theme: dark                      # Theme: dark, light
+  theme: dark                      # Theme: dark, light, minimal, contrast
 ---
 ```
 
@@ -756,6 +858,94 @@ options:
 ```
 
 Set `toolbar: false` to hide it completely.
+
+### Themes
+
+Five built-in themes are available:
+
+| Theme | Description |
+|-------|-------------|
+| `dark` | Default. High-contrast dark background optimized for projectors |
+| `light` | Clean white background for well-lit rooms |
+| `minimal` | Muted, distraction-free aesthetic for code-heavy decks |
+| `contrast` | WCAG AAA high-contrast (black/white/yellow) for accessibility |
+
+The default theme (`dark`) features presentation-grade typography: centered titles, large headings, generous spacing, and enlarged code blocks.
+
+### Slide Transitions
+
+Control how slides animate when navigating:
+
+```yaml
+options:
+  transition: slide    # slide (default) or fade
+```
+
+- `slide` — Horizontal slide-in animation (default)
+- `fade` — Smooth opacity crossfade
+
+## Onboarding Mode
+
+Transform any `.deck.md` file into a guided onboarding experience with step tracking, validation, and recovery.
+
+### Activation
+
+Add `mode: onboarding` to your deck's options:
+
+```yaml
+---
+title: Team Onboarding
+options:
+  mode: onboarding
+---
+```
+
+### Behavior Differences
+
+In onboarding mode:
+- Slides are treated as **steps** with completion tracking
+- A **step progress indicator** replaces the slide counter (Step 1 of 8)
+- **No slide transitions** — focus is on instructions, not visuals
+- **Retry Step** and **Reset to Checkpoint** buttons appear on failure
+- **Validation results** display inline after `validate.*` actions
+
+### Checkpoints
+
+Add checkpoint markers to slides that represent important milestones:
+
+```markdown
+# Install Dependencies
+<!-- checkpoint: deps-installed -->
+
+Install the project dependencies:
+```
+
+When you navigate to a slide with a checkpoint, the IDE state is automatically saved. If something goes wrong, click **Reset to Checkpoint** to restore the workspace to that point.
+
+### Step Validation
+
+Use `validate.*` actions to confirm each step completed successfully:
+
+````markdown
+```action
+type: validate.command
+command: node --version
+label: Verify Node.js is installed
+```
+
+```action
+type: validate.fileExists
+path: node_modules/.package-lock.json
+label: Verify dependencies installed
+```
+````
+
+- ✅ Success marks the step as complete
+- ❌ Failure shows an inline error with **Retry** option
+
+### Example
+
+See `examples/onboarding-demo.deck.md` for a complete onboarding deck demonstrating all features.
 
 ## Workspace Trust
 
