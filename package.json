@@ -2,7 +2,7 @@
   "name": "executable-talk",
   "displayName": "Executable Talk",
   "description": "Transform Markdown presentations into executable narratives with interactive code demonstrations and environment variable support",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "publisher": "focus-space",
   "license": "MIT",
   "repository": {
