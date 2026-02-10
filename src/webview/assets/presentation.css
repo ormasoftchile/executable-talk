@@ -1696,7 +1696,6 @@ html, body {
 .breadcrumb-trail__back:hover {
   background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
   color: var(--vscode-foreground, #cccccc);
-}cccccc));
 }
 
 .breadcrumb-trail__separator {
@@ -1727,9 +1726,6 @@ html, body {
 .breadcrumb-trail__back:hover {
   background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
   color: var(--vscode-foreground, #cccccc);
-}vscode-descriptionForeground, #888);
-  font-size: 12px;
-  padding: 2px 4px;
 }
 
 .breadcrumb-trail__back {

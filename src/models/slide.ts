@@ -109,6 +109,6 @@ export function createSlide(
     interactiveElements: [],
     renderDirectives: [],
     fragmentCount: 0,
-    checkpoint: checkpoint ?? (frontmatter?.checkpoint as string | undefined),
+    checkpoint: checkpoint ?? frontmatter?.checkpoint,
   };
 }
