@@ -7,7 +7,7 @@
  * wherever slide content is sent to the webview.
  */
 
-import { Slide } from '../models/slide';
+import { Slide, InteractiveElement } from '../models/slide';
 
 /**
  * Escape HTML special characters in content strings.
@@ -69,10 +69,46 @@ export function injectBlockElements(html: string, slide: Slide): string {
       .join('&');
     const href = simpleParams ? `action:${type}?${simpleParams}` : `action:${type}`;
     const escapedLabel = escapeHtml(el.label);
-    buttonMap.set(el.id, `<p><a href="${href}" data-action-id="${el.action.id}">${escapedLabel}</a></p>`);
+    // If element has fragment animation, append a fragment comment so
+    // processFragments will pick it up during the single-pass sweep.
+    const fragmentComment = el.fragment
+      ? ` <!-- .fragment${typeof el.fragment === 'string' ? ` ${el.fragment}` : ''} -->`
+      : '';
+    buttonMap.set(el.id, `<p><a href="${href}" data-action-id="${el.action.id}">${escapedLabel}</a>${fragmentComment}</p>`);
   }
 
   // Replace each placeholder; remove unmatched ones (from errored blocks)
+  return html.replace(
+    /<!--ACTION:(block-\d+-\d+)-->/g,
+    (_match, id: string) => buttonMap.get(id) ?? '',
+  );
+}
+
+/**
+ * Lightweight variant of {@link injectBlockElements} that accepts an array
+ * of parsed elements directly, so the slide parser can call it before
+ * fragment processing (no Slide object needed yet).
+ */
+export function injectBlockElementsFromParsed(html: string, elements: InteractiveElement[]): string {
+  const blockElements = elements.filter(el => el.source === 'block');
+  if (blockElements.length === 0) {
+    return html;
+  }
+  const buttonMap = new Map<string, string>();
+  for (const el of blockElements) {
+    const type = el.action.type;
+    const params = el.action.params ?? {};
+    const simpleParams = Object.entries(params)
+      .filter(([, v]) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+      .join('&');
+    const href = simpleParams ? `action:${type}?${simpleParams}` : `action:${type}`;
+    const escapedLabel = escapeHtml(el.label);
+    const fragmentComment = el.fragment
+      ? ` <!-- .fragment${typeof el.fragment === 'string' ? ` ${el.fragment}` : ''} -->`
+      : '';
+    buttonMap.set(el.id, `<p><a href="${href}" data-action-id="${el.action.id}">${escapedLabel}</a>${fragmentComment}</p>`);
+  }
   return html.replace(
     /<!--ACTION:(block-\d+-\d+)-->/g,
     (_match, id: string) => buttonMap.get(id) ?? '',

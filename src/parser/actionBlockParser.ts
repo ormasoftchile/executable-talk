@@ -160,10 +160,13 @@ export function parseActionBlocks(
       continue;
     }
 
-    // Build params object (all keys except 'type' and 'label')
+    // Extract fragment animation property (not passed as an action param)
+    const fragment = yamlObj.fragment;
+
+    // Build params object (all keys except 'type', 'label', and 'fragment')
     const params: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(yamlObj)) {
-      if (key !== 'type' && key !== 'label') {
+      if (key !== 'type' && key !== 'label' && key !== 'fragment') {
         params[key] = value;
       }
     }
@@ -190,6 +193,7 @@ export function parseActionBlocks(
       position,
       rawLink: fullMatch,
       source: 'block',
+      fragment: fragment === true || typeof fragment === 'string' ? fragment : undefined,
     };
 
     elements.push(element);

@@ -333,6 +333,28 @@ export class ActionCompletionProvider {
       });
     }
 
+    // Add universal meta-fields (label, fragment) if not already set
+    if (!existingKeys.has('label')) {
+      items.push({
+        label: 'label',
+        kind: CompletionKind.Property,
+        detail: 'string',
+        documentation: 'Custom display label for the action button.',
+        insertText: 'label: ',
+        sortText: '1_label',
+      });
+    }
+    if (!existingKeys.has('fragment')) {
+      items.push({
+        label: 'fragment',
+        kind: CompletionKind.Property,
+        detail: 'boolean | string',
+        documentation: 'Animate the action button as a fragment. Use `true` for default fade, or a specific animation type (e.g., `slide-up`, `zoom`).',
+        insertText: 'fragment: true',
+        sortText: '1_fragment',
+      });
+    }
+
     return items;
   }
 
