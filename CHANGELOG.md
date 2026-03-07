@@ -5,6 +5,48 @@ All notable changes to the Executable Talk extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-03-07
+
+### Added
+
+- **Onboarding Mode**: Transform presentations into guided step-by-step experiences
+  - Add `mode: onboarding` to deck options to enable
+  - Step progress indicator replaces slide counter
+  - Checkpoint markers with `<!-- checkpoint: name -->` for IDE state snapshots
+  - **Retry Step** and **Reset to Checkpoint** buttons on validation failure
+  - Inline validation results display after `validate.*` actions
+
+- **Validation Actions**: Verify setup and environment during presentations
+  - `validate.command` - Run a command and check exit code/output
+  - `validate.fileExists` - Check file presence or absence
+  - `validate.port` - Check if a TCP port is open
+
+- **Themes**: Five built-in presentation themes
+  - `dark` (default) - High-contrast for projectors
+  - `light` - Clean white background
+  - `minimal` - Muted, distraction-free aesthetic
+  - `contrast` - WCAG AAA high-contrast accessibility theme
+
+- **Layout Directives**: Markdown-compatible layout helpers
+  - `:::center` - Center content on slide
+  - `:::columns` / `:::left` / `:::right` - Two-column layouts
+  - `:::advanced` - Collapsible content for advanced users
+  - `:::optional` - Non-blocking optional content with visual badge
+
+- **Slide Transitions**: Configurable slide animations
+  - `transition: slide` (default) - Horizontal slide-in
+  - `transition: fade` - Smooth opacity crossfade
+
+- **Fragment Animations in Action Blocks**: Full fragment support in YAML action blocks
+
+### Fixed
+
+- Fragment regex dotall flag crossing tag boundaries
+- Fragment indices now assigned in document order
+- Action block buttons render at original position
+- Layout directives add proper blank lines for markdown-it rendering
+- CSS syntax and type assertion issues
+
 ## [0.4.0] - 2026-02-08
 
 ### Added
@@ -222,8 +264,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 
 - Keyboard shortcut customization
-- Custom themes for presentation view
 - Export to standalone HTML
-- Animation and transition effects
-- Code execution output display
 - Remote presentation sharing
