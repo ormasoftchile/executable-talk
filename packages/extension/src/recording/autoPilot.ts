@@ -150,7 +150,20 @@ export function buildAutoPilotPlan(
     const sequenceCuesAfterReveals = slide.fragmentCount > 0 &&
       slideCues.length > 0 &&
       slideCues.every(cue => cue.source !== 'comment');
-    if (!sequenceCuesAfterReveals) {
+    const sequenceStaticCues = slide.fragmentCount === 0 &&
+      slideCues.length > 0 &&
+      slideCues.every(cue => cue.source !== 'comment');
+    if (sequenceStaticCues) {
+      for (const cue of slideCues) {
+        steps.push({
+          type: 'wait',
+          durationMs: calculateDisplayTime(cue.text, cfg, measuredDurations.get(cue)),
+          slideIndex: si,
+          label: `Slide ${si + 1}: "${truncate(cue.text, 40)}"`,
+          narrationCues: [{ cueIndex: cues.indexOf(cue) + 1, offsetMs: 0 }],
+        });
+      }
+    } else if (!sequenceCuesAfterReveals) {
       const slideCue = findCue(cues, si, undefined);
       const slideWait = calculateDisplayTime(
         slideCue?.text,
@@ -282,7 +295,7 @@ export function buildAutoPilotPlan(
       // No fragments — trigger all interactive elements on slide load
       for (const el of slide.interactiveElements) {
         notableOrdinal++;
-        const actionCue = findCue(cues, si, notableOrdinal);
+        const actionCue = sequenceStaticCues ? undefined : findCue(cues, si, notableOrdinal);
         addActionSteps(
           steps,
           el,

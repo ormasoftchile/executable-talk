@@ -5,13 +5,57 @@
 
 import { expect } from 'chai';
 import { CaptionsScaffoldGenerator } from '../../../packages/extension/src/recording/captionsScaffoldGenerator';
-import { createMockSession, createMockSegment } from './helpers';
+import { createMockSession, createMockSegment, createMockEvent } from './helpers';
 
 describe('CaptionsScaffoldGenerator', () => {
   let generator: CaptionsScaffoldGenerator;
 
   beforeEach(() => {
     generator = new CaptionsScaffoldGenerator();
+  });
+
+  describe('generateNarrationSrt()', () => {
+    const timings = [
+      { cueIndex: 1, text: 'First recorded cue.', durationMs: 2000 },
+      { cueIndex: 2, text: 'Second recorded cue.', durationMs: 3000 },
+    ];
+
+    it('uses one caption per explicit cue start, not duplicated inferred segments', () => {
+      const session = createMockSession({
+        events: [
+          createMockEvent({ type: 'narration.cue.started', relativeTimeMs: 1000, metadata: { cueIndex: 1 } }),
+          createMockEvent({ type: 'fragment.revealed', relativeTimeMs: 3100 }),
+          createMockEvent({ type: 'narration.cue.started', relativeTimeMs: 3500, metadata: { cueIndex: 2 } }),
+        ],
+        segments: [createMockSegment({ draftNarration: 'Duplicate inferred caption.' })],
+      });
+
+      const srt = generator.generateNarrationSrt(session, timings);
+
+      expect(srt).to.equal([
+        '1', '00:00:01,000 --> 00:00:03,000', 'First recorded cue.', '',
+        '2', '00:00:03,500 --> 00:00:06,500', 'Second recorded cue.', '',
+      ].join('\n'));
+    });
+
+    it('reports a missing scheduled cue before handing off to assembly', () => {
+      const session = createMockSession({
+        events: [createMockEvent({ type: 'narration.cue.started', metadata: { cueIndex: 1 } })],
+      });
+
+      expect(() => generator.generateNarrationSrt(session, timings)).to.throw('cue 2');
+    });
+
+    it('rejects duplicate cue starts instead of assigning the same take twice', () => {
+      const session = createMockSession({
+        events: [
+          createMockEvent({ type: 'narration.cue.started', metadata: { cueIndex: 1 } }),
+          createMockEvent({ type: 'narration.cue.started', metadata: { cueIndex: 1 } }),
+        ],
+      });
+
+      expect(() => generator.generateNarrationSrt(session, timings)).to.throw('cue 1');
+    });
   });
 
   describe('generateSrt()', () => {

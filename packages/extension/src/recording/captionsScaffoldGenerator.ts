@@ -10,8 +10,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { RecordingSession } from '@deckpilot/core/models/recording';
+import type { NarrationTiming } from './autoPilot';
+import { buildNarrationSegments } from './narrationSegments';
 
 export class CaptionsScaffoldGenerator {
+  generateNarrationSrt(session: RecordingSession, timings: readonly NarrationTiming[]): string {
+    const lines: string[] = [];
+    for (const [index, segment] of buildNarrationSegments(session, timings).entries()) {
+      lines.push(String(timings[index].cueIndex));
+      lines.push(`${formatSrtTimestamp(segment.startTimeMs)} --> ${formatSrtTimestamp(segment.endTimeMs)}`);
+      lines.push(wrapText(segment.draftNarration, 42));
+      lines.push('');
+    }
+    return lines.join('\n');
+  }
+
   /**
    * Generate an SRT-formatted caption string from session segments.
    */
