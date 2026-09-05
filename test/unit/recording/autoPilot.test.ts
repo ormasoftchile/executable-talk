@@ -6,6 +6,30 @@ import {
 } from '../../../packages/extension/src/recording/autoPilot';
 
 describe('AutoPilot narration timing', () => {
+  it('schedules every cue on static slides before advancing to fragmented slides', async () => {
+    const result = await parseDeck('# Static slide\n\nText\n\n# Fragmented slide\n\nText', 'static-cues.deck.md');
+    const slides = result.deck!.slides;
+    slides[0].fragmentCount = 0;
+    slides[0].cues = ['First static cue.', 'Second static cue.', 'Third static cue.'];
+    slides[1].cues = ['Next slide cue.'];
+    const timings = [
+      { cueIndex: 1, text: 'First static cue.', durationMs: 1000 },
+      { cueIndex: 2, text: 'Second static cue.', durationMs: 2000 },
+      { cueIndex: 3, text: 'Third static cue.', durationMs: 3000 },
+      { cueIndex: 4, text: 'Next slide cue.', durationMs: 4000 },
+    ];
+
+    const plan = buildAutoPilotPlan(slides, { initialDelayMs: 0, finalDelayMs: 0 }, timings);
+    const narrated = plan.filter(step => step.narrationCues?.length);
+
+    expect(narrated.flatMap(step => step.narrationCues!.map(cue => cue.cueIndex)))
+      .to.deep.equal([1, 2, 3, 4]);
+    expect(narrated.map(step => step.durationMs)).to.deep.equal([1400, 2400, 3400, 4400]);
+    const advance = plan.findIndex(step => step.type === 'advance' && step.slideIndex === 1);
+    expect(plan.slice(0, advance).flatMap(step => step.narrationCues ?? []).map(cue => cue.cueIndex))
+      .to.deep.equal([1, 2, 3]);
+  });
+
   it('reveals all slide content before a single sidecar cue', async () => {
     const result = await parseDeck('## Some Slide\n\nContent', 'single-cue.md');
     result.deck!.slides[0].cues = ['Narrate the complete slide.'];

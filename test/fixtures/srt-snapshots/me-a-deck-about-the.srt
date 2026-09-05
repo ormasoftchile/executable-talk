@@ -4,45 +4,45 @@ Welcome to this presentation on the Bring
 Your Own Key feature in Copilot CLI.
 
 2
-00:00:16,600 --> 00:00:22,200
+00:00:22,200 --> 00:00:27,800
 BYOK stands for Bring Your Own Key,
 allowing users to manage their encryption
 keys.
 
 3
-00:00:29,700 --> 00:00:33,300
+00:00:38,500 --> 00:00:42,100
 Using BYOK gives you full control over
 encryption keys.
 
 4
-00:00:40,800 --> 00:00:47,200
+00:00:53,200 --> 00:00:59,600
 Setting up BYOK involves three steps:
 generating a key, configuring the CLI, and
 verifying the setup.
 
 5
-00:01:00,200 --> 00:01:06,200
+00:01:15,400 --> 00:01:21,400
 The first step is to generate an
 encryption key using your preferred key
 management tool.
 
 6
-00:01:19,200 --> 00:01:24,000
+00:01:37,600 --> 00:01:42,400
 Next, update the Copilot CLI configuration
 file to use the generated key.
 
 7
-00:01:39,500 --> 00:01:43,100
+00:02:02,300 --> 00:02:05,900
 Finally, verify the setup by running the
 provided command.
 
 8
-00:01:56,100 --> 00:02:00,100
+00:02:22,900 --> 00:02:26,900
 Copilot CLI also supports local models
 hosted on your infrastructure.
 
 9
-00:02:13,100 --> 00:02:19,100
+00:02:44,700 --> 00:02:50,700
 In summary, BYOK enhances security and
 compliance by giving you full control over
 encryption keys.

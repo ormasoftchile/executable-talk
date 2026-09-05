@@ -141,8 +141,9 @@ async function resolveDeckUri(editor: vscode.TextEditor | undefined): Promise<vs
             const sessionJsonPath = path.join(curDir, 'recording-session.json');
             if (fs.existsSync(sessionJsonPath)) {
                 try {
-                    const data = JSON.parse(fs.readFileSync(sessionJsonPath, 'utf8'));
-                    if (data.deckPath && fs.existsSync(data.deckPath)) {
+                    const data: unknown = JSON.parse(fs.readFileSync(sessionJsonPath, 'utf8'));
+                    if (typeof data === 'object' && data !== null && 'deckPath' in data &&
+                        typeof data.deckPath === 'string' && data.deckPath && fs.existsSync(data.deckPath)) {
                         return vscode.Uri.file(data.deckPath);
                     }
                 } catch {
@@ -153,7 +154,7 @@ async function resolveDeckUri(editor: vscode.TextEditor | undefined): Promise<vs
             if (parent === curDir) { break; }
             curDir = parent;
         }
-        const match = filePath.match(/[\/\\]recordings[\/\\]([^\/\\]+)/);
+        const match = filePath.match(/[/\\]recordings[/\\]([^/\\]+)/);
         if (match) {
             const deckName = match[1];
             const decks = await findDeckFiles();
@@ -753,7 +754,7 @@ export function activate(context: vscode.ExtensionContext): DeckpilotDiagramAPI 
                 const captionGen = new CaptionsScaffoldGenerator();
 
                 const sessionFiles = await serializer.exportSession(session, outputDir);
-                const scriptFiles = await scriptGen.exportScripts(session, outputDir);
+                const scriptFiles = await scriptGen.exportNarrationScripts(session, outputDir, timings);
 
                 const recordedVideo = session.composition?.outputPath ?? session.recorder?.outputPath;
                 if (!recordedVideo) {
@@ -766,7 +767,7 @@ export function activate(context: vscode.ExtensionContext): DeckpilotDiagramAPI 
                 const sessionProject = await stageNarrationProjectForSession(
                     project,
                     outputDir,
-                    captionGen.generateSrt(session),
+                    captionGen.generateNarrationSrt(session, timings),
                     videoBasename,
                 );
                 const captionFile = sessionProject.srtPath;

@@ -5,8 +5,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { RecordingSession, RecordingSegment } from '@deckpilot/core/models/recording';
+import type { NarrationTiming } from './autoPilot';
+import { buildNarrationSegments } from './narrationSegments';
 
 export class VoiceOverScriptGenerator {
+  async exportNarrationScripts(
+    session: RecordingSession,
+    outputDir: string,
+    timings: readonly NarrationTiming[],
+  ): Promise<string[]> {
+    return this.exportScripts({
+      ...session,
+      segments: buildNarrationSegments(session, timings),
+    }, outputDir);
+  }
+
   /**
    * Generate a Markdown voice-over script from a recording session.
    */

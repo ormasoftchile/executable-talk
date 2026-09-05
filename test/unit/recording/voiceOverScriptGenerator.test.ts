@@ -5,14 +5,100 @@
  */
 
 import { expect } from 'chai';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import type { RecordingSession } from '../../../packages/core/src/models/recording';
 import { VoiceOverScriptGenerator } from '../../../packages/extension/src/recording/voiceOverScriptGenerator';
-import { createMockSession, createMockSegment } from './helpers';
+import { CaptionsScaffoldGenerator } from '../../../packages/extension/src/recording/captionsScaffoldGenerator';
+import { createMockSession, createMockSegment, createMockEvent } from './helpers';
 
 describe('VoiceOverScriptGenerator', () => {
   let generator: VoiceOverScriptGenerator;
 
   beforeEach(() => {
     generator = new VoiceOverScriptGenerator();
+  });
+
+  describe('exportNarrationScripts()', () => {
+    let outputDirectory: string;
+
+    beforeEach(async () => {
+      outputDirectory = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'deckpilot-measured-script-'));
+    });
+
+    afterEach(async () => {
+      await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+    });
+
+    it('exports measured cues once in Markdown and JSON without mutating the session', async () => {
+      const session = createMockSession({
+        events: [
+          createMockEvent({ type: 'fragment.revealed', relativeTimeMs: 999, slideIndex: 1, fragmentIndex: 1 }),
+          createMockEvent({ type: 'narration.cue.started', relativeTimeMs: 1000, slideIndex: 1, metadata: { cueIndex: 1 } }),
+          createMockEvent({ type: 'narration.cue.started', relativeTimeMs: 3400, slideIndex: 1, metadata: { cueIndex: 2 } }),
+        ],
+        segments: [
+          createMockSegment({ slideIndex: 1, slideTitle: 'Demo', fragmentIndex: 1,
+            cueText: 'Wrong inferred fragment.', draftNarration: 'Wrong inferred fragment.' }),
+          createMockSegment({ slideIndex: 1, cueText: 'First recorded cue.', draftNarration: 'First recorded cue.' }),
+          createMockSegment({ slideIndex: 1, fragmentIndex: 2, cueText: 'Second recorded cue.', draftNarration: 'Second recorded cue.' }),
+        ],
+      });
+      const timings = [
+        { cueIndex: 1, text: 'First recorded cue.', durationMs: 2000 },
+        { cueIndex: 2, text: 'Second recorded cue.', durationMs: 3000 },
+      ];
+      const original = JSON.stringify(session);
+      const captions = new CaptionsScaffoldGenerator();
+
+      const files = await generator.exportNarrationScripts(session, outputDirectory, timings);
+      const markdown = await fs.promises.readFile(files[0], 'utf8');
+      const script = JSON.parse(await fs.promises.readFile(files[1], 'utf8')) as RecordingSession;
+
+      expect(markdown.match(/^### Cue /gm)).to.have.length(2);
+      expect(markdown.match(/^\*\*Cue:\*\*/gm)).to.have.length(2);
+      expect(markdown).to.include('Slide 2: Demo');
+      expect(markdown).to.include('00:01.000').and.include('00:03.000');
+      expect(markdown).to.include('00:03.400').and.include('00:06.400');
+      expect(markdown).not.to.include('### Fragment').and.not.to.include('Wrong inferred fragment');
+      expect(script.segments.map(segment =>
+        [segment.startTimeMs, segment.endTimeMs, segment.durationMs, segment.cueText]))
+        .to.deep.equal([[1000, 3000, 2000, timings[0].text], [3400, 6400, 3000, timings[1].text]]);
+      expect(new Set(script.segments.map((segment: { segmentId: string }) => segment.segmentId)).size).to.equal(2);
+      expect(captions.generateSrt(script)).to.equal(captions.generateNarrationSrt(session, timings));
+      expect(script.events).to.deep.equal(session.events);
+      expect(JSON.stringify(session)).to.equal(original);
+    });
+
+    it('keeps distinct cue starts even when their narration text is identical', async () => {
+      const session = createMockSession({
+        events: [
+          createMockEvent({ type: 'narration.cue.started', relativeTimeMs: 0, metadata: { cueIndex: 1 } }),
+          createMockEvent({ type: 'narration.cue.started', relativeTimeMs: 2000, metadata: { cueIndex: 2 } }),
+        ],
+      });
+      const files = await generator.exportNarrationScripts(session, outputDirectory, [
+        { cueIndex: 1, text: 'Repeated words.', durationMs: 1000 },
+        { cueIndex: 2, text: 'Repeated words.', durationMs: 1000 },
+      ]);
+      const script = JSON.parse(await fs.promises.readFile(files[1], 'utf8')) as RecordingSession;
+      expect(script.segments).to.have.length(2);
+    });
+
+    it('rejects an unscheduled cue before writing scripts', async () => {
+      let error: unknown;
+      try {
+        await generator.exportNarrationScripts(createMockSession(), outputDirectory, [
+          { cueIndex: 1, text: 'Missing cue.', durationMs: 1000 },
+        ]);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).to.be.instanceOf(Error);
+      expect((error as Error).message).to.include('cue 1');
+      expect(await fs.promises.readdir(outputDirectory)).to.deep.equal([]);
+    });
   });
 
   describe('generateMarkdown()', () => {
