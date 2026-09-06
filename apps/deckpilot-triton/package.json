@@ -31,7 +31,7 @@
     "bundle:watch": "node esbuild.mjs --watch",
     "build": "npm run bundle && npm run vendor-triton",
     "vendor-triton": "node scripts/vendor-triton.mjs",
-    "test:runtime": "node --test test/runtime/*.test.mjs",
+    "test:runtime": "node --test test/runtime/tritonRuntime.test.mjs",
     "test": "mocha --require test/unit/helpers/vscode-mock.cjs --require ts-node/register 'test/unit/**/*.test.ts'"
   },
   "devDependencies": {
