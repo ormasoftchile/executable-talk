@@ -223,6 +223,9 @@ export type WebviewToHostMessage =
 export interface SlideChangedMessage {
   type: 'slideChanged';
   payload: {
+    appearance?: import('@deckpilot/core/models/appearance').ResolvedAppearance;
+    appearanceCss?: string;
+    diagramBlocks?: Array<{ blockId: string; html: string }>;
     slideIndex: number;
     slideHtml: string;
     speakerNotes?: string;
@@ -470,7 +473,18 @@ export interface TriggerActionMessage {
 /**
  * Union of all Host → Webview messages
  */
-export type HostToWebviewMessage =
+export interface AppearanceChangedMessage {
+  type: 'appearanceChanged';
+  payload: {
+    requestId?: number;
+    appearance: import('@deckpilot/core/models/appearance').ResolvedAppearance;
+    css: string;
+    slideIndex?: number;
+    blocks: Array<{ blockId: string; html: string }>;
+  };
+}
+
+export type HostToWebviewMessage = AppearanceChangedMessage
   | SlideChangedMessage
   | ActionStatusChangedMessage
   | DeckLoadedMessage

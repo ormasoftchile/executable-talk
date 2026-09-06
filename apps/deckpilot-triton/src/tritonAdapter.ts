@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { pathToFileURL } from 'node:url';
+import { matter } from '@deckpilot/core/parser/frontmatter';
 import type {
   IDiagramRenderer,
   DiagramFenceInfo,
@@ -12,10 +13,11 @@ import type {
  * The vendoring step pulls this from the published Triton core package.
  */
 type TritonModule = {
+  runtimeRevision?: string;
   renderMermaid(
     text: string,
-    options?: { theme?: string; format?: 'svg' },
-  ): { svg?: string; warnings?: string[]; kind?: string };
+    options?: DiagramRenderOptions & { format?: 'svg' },
+  ): { svg?: string; warnings?: string[]; kind?: string; appearance?: DiagramRenderResult['appearance'] };
 };
 
 const TRITON_THEME_PRESETS = new Set([
@@ -51,6 +53,8 @@ const TRITON_UNSUPPORTED_MERMAID_TYPES = new Set([
  * vendor-triton` can be used to rebuild it directly.
  */
 export class TritonDiagramRenderer implements IDiagramRenderer {
+  readonly appearanceProtocol = 1 as const;
+  version: string | undefined;
   readonly id = 'triton';
   // Outranks the deckpilot-mermaid engine (priority 10) so `diagram:mermaid`
   // fences render through Triton and share its theme presets. Triton's
@@ -112,7 +116,25 @@ export class TritonDiagramRenderer implements IDiagramRenderer {
     );
     try {
       const triton = await this.loadTriton();
-      const result = triton.renderMermaid(source, { theme: resolvedTheme, format: 'svg' });
+      this.version = triton.runtimeRevision;
+      const bodyMetadata = matter(source).data as Record<string, unknown>;
+      const attrs = fence.attributes ?? {};
+      const inherited = options?.appearance;
+      const requestedStyle = attrs.style ?? (fenceTheme && fenceTheme !== 'auto' ? fenceTheme : undefined)
+        ?? (typeof bodyMetadata.style === 'string' ? bodyMetadata.style : undefined)
+        ?? (typeof bodyMetadata.theme === 'string' && fenceTheme !== 'auto' ? bodyMetadata.theme : undefined)
+        ?? options?.style ?? (options?.theme && options.theme !== 'auto' ? options.theme : undefined);
+      const requestedMode = attrs.mode ?? (typeof bodyMetadata.mode === 'string' ? bodyMetadata.mode : undefined) ?? options?.mode;
+      const mode = requestedMode === 'light' || requestedMode === 'dark' ? requestedMode : inherited?.mode;
+      const surface = attrs.surface ?? options?.surface;
+      const result = triton.renderMermaid(source, inherited ? {
+        appearance: inherited,
+        style: requestedStyle && requestedStyle !== 'inherit' ? requestedStyle : inherited.style,
+        mode,
+        surface: surface === 'opaque' || surface === 'transparent' ? surface : 'auto',
+        fontRevision: options?.fontRevision,
+        format: 'svg',
+      } : { theme: resolvedTheme, format: 'svg' });
 
       if (!result.svg) {
         return {
@@ -130,7 +152,8 @@ export class TritonDiagramRenderer implements IDiagramRenderer {
         // background so the diagram inherits the slide. Pick a theme whose
         // foreground contrasts with the slide (e.g. a high-contrast/dark theme
         // on a dark deck) for readable frameless text.
-        svg: stripBackgroundRect(result.svg),
+        svg: inherited ? result.svg : stripBackgroundRect(result.svg),
+        appearance: result.appearance,
         warnings: result.warnings,
         rendererId: this.id,
       };

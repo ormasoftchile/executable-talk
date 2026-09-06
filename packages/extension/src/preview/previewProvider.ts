@@ -16,6 +16,9 @@ import { WatchedSources } from './watchedSources';
 import { DiagramRendererRegistry } from '../renderer/diagram/registry';
 import { RenderBlockUpdatePayload } from '../webview/messages';
 import { DiagramService, annotateDiagramPlaceholders } from '../services/diagramService';
+import { AppearanceService } from '../services/appearanceService';
+import { appearanceCss, type ResolvedAppearance } from '@deckpilot/core/models/appearance';
+import type { Deck } from '@deckpilot/core/models/deck';
 
 const DEBOUNCE_MS = 150;
 const VIEW_TYPE = 'deckPilotPreview';
@@ -34,10 +37,12 @@ export class PreviewProvider implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
   private nonce = generateNonce();
   private refreshVersion = 0;
+  private currentDeck: Deck | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     diagramRegistry: DiagramRendererRegistry,
+    private readonly appearanceService: AppearanceService = new AppearanceService(),
   ) {
     this.watched = new WatchedSources(() => this.scheduleRefresh());
     this.diagramService = new DiagramService(diagramRegistry);
@@ -63,6 +68,9 @@ export class PreviewProvider implements vscode.Disposable {
       this.attachDocumentListener();
       this.attachSelectionListener();
       this.attachMessageListener();
+      this.disposables.push(this.appearanceService.onDidChange((filePath, appearance) => {
+        if (this.currentDeck?.filePath === filePath) void this.updateAppearance(appearance);
+      }));
     }
 
     this.panel.title = previewTitle(deckUri);
@@ -131,6 +139,9 @@ export class PreviewProvider implements vscode.Disposable {
         return;
       }
       const m = msg as { type?: string; slideIndex?: number };
+      if (m.type === 'appearanceMenu' && this.currentDeck) {
+        void this.appearanceService.showMenu(this.currentDeck.filePath);
+      }
       if (m.type === 'revealSource' && typeof m.slideIndex === 'number') {
         void this.revealSlideSource(m.slideIndex);
       }
@@ -206,6 +217,8 @@ export class PreviewProvider implements vscode.Disposable {
     }
 
     const workspaceRoot = this.resolveBasePath(result.deck);
+    this.currentDeck = result.deck;
+    const appearance = this.appearanceService.configure(result.deck);
     const diagramThemeDefault = result.deck.metadata.diagrams?.theme;
     for (const slide of result.deck.slides) {
       slide.html = annotateDiagramPlaceholders(slide.html, workspaceRoot, diagramThemeDefault);
@@ -213,7 +226,8 @@ export class PreviewProvider implements vscode.Disposable {
 
     this.panel.webview.html = renderPreviewHtml(result.deck, {
       ...renderOpts,
-      warnings: result.warnings,
+      warnings: [...(result.warnings ?? []), ...appearance.warnings],
+      appearance,
     });
     const refreshVersion = ++this.refreshVersion;
     void this.resolvePreviewDiagrams(result.deck.slides.map((slide) => slide.html), refreshVersion);
@@ -346,15 +360,19 @@ export class PreviewProvider implements vscode.Disposable {
       cspSource: webview.cspSource,
       nonce: this.nonce,
       cssUri,
+      fontsUri: webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri,
+        'packages', 'extension', 'src', 'webview', 'assets', 'appearance-fonts.css')),
       deckPath: this.deckUri!.fsPath,
     };
   }
 
   private async resolvePreviewDiagrams(slidesHtml: string[], refreshVersion: number): Promise<void> {
+    const deck = this.currentDeck;
+    const appearance = deck ? this.appearanceService.get(deck) : undefined;
     for (const slideHtml of slidesHtml) {
-      const updates = await this.diagramService.resolveSlideBlocks(slideHtml);
+      const updates = await this.diagramService.resolveSlideBlocks(slideHtml, appearance, deck?.metadata.diagrams);
       for (const update of updates) {
-        if (!this.panel || refreshVersion !== this.refreshVersion) {
+        if (!this.panel || refreshVersion !== this.refreshVersion || (deck && this.appearanceService.get(deck).revision !== appearance?.revision)) {
           return;
         }
         await this.sendRenderBlockUpdate({
@@ -368,6 +386,18 @@ export class PreviewProvider implements vscode.Disposable {
 
   private async sendRenderBlockUpdate(payload: RenderBlockUpdatePayload): Promise<void> {
     await this.panel?.webview.postMessage({ type: 'renderBlockUpdate', payload });
+  }
+
+  private async updateAppearance(appearance: ResolvedAppearance): Promise<void> {
+    const deck = this.currentDeck;
+    const version = this.refreshVersion;
+    if (!deck || !this.panel) return;
+    const groups = await Promise.all(deck.slides.map(slide =>
+      this.diagramService.resolveSlideBlocks(slide.html, appearance, deck.metadata.diagrams)));
+    if (!this.panel || this.currentDeck !== deck || this.refreshVersion !== version || this.appearanceService.get(deck).revision !== appearance.revision) return;
+    await this.panel.webview.postMessage({ type: 'appearanceChanged', payload: {
+      appearance, css: appearanceCss(appearance), blocks: groups.flat(),
+    } });
   }
 
   private computeResourceRoots(): vscode.Uri[] {

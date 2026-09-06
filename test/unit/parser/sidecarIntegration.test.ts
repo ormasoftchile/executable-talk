@@ -115,6 +115,102 @@ describe('sidecarIntegration — full .deck.md + .deck.yaml round-trip', () => {
     fs.writeFileSync(sidecarPath, content, 'utf-8');
   }
 
+  describe('sidecar scenes', () => {
+    const markdown = '# Introduction\n\nWelcome.\n\n# Live Demo\n\nRun the demo.';
+    const sceneYaml = 'scenes:\n  - name: Opening\n    slide: introduction\n  - name: Demo\n    slide: live-demo\n';
+
+    it('resolves title-derived IDs without frontmatter or explicit anchors', async () => {
+      writeDeckMd(markdown);
+      writeDeckYaml(sceneYaml);
+
+      const result = await parseDeck(markdown, deckMdPath);
+
+      expect(result.error).to.equal(undefined);
+      expect(result.warnings).to.equal(undefined);
+      expect(result.deck!.metadata.scenes).to.deep.equal([
+        { name: 'Opening', slide: 0 }, { name: 'Demo', slide: 1 },
+      ]);
+    });
+
+    it('keeps ID-based scene targets when slides are reordered', async () => {
+      const reordered = '# Live Demo\n\nRun the demo.\n\n# Introduction\n\nWelcome.';
+      writeDeckMd(reordered);
+      writeDeckYaml(sceneYaml);
+
+      const result = await parseDeck(reordered, deckMdPath);
+
+      expect(result.deck!.metadata.scenes).to.deep.equal([
+        { name: 'Opening', slide: 1 }, { name: 'Demo', slide: 0 },
+      ]);
+    });
+
+    it('accepts explicit IDs and one-based numeric targets', async () => {
+      const anchored = '# Introduction\n<!-- id: opening -->\n\nWelcome.\n\n# Live Demo\n\nRun the demo.';
+      writeDeckMd(anchored);
+      writeDeckYaml('scenes:\n  - name: Opening\n    slide: opening\n  - name: Demo\n    slide: 2\n');
+
+      const result = await parseDeck(anchored, deckMdPath);
+
+      expect(result.warnings).to.equal(undefined);
+      expect(result.deck!.metadata.scenes).to.deep.equal([
+        { name: 'Opening', slide: 0 }, { name: 'Demo', slide: 1 },
+      ]);
+    });
+
+    it('preserves inline scene precedence, including an explicitly empty list', async () => {
+      writeDeckYaml(sceneYaml);
+      for (const [authored, expected] of [
+        ['[{name: Inline, slide: 2}]', [{ name: 'Inline', slide: 1 }]],
+        ['[]', []],
+      ] as const) {
+        const inline = `---\nscenes: ${authored}\n---\n${markdown}`;
+        writeDeckMd(inline);
+        const result = await parseDeck(inline, deckMdPath);
+        expect(result.warnings).to.equal(undefined);
+        expect(result.deck!.metadata.scenes).to.deep.equal(expected);
+      }
+    });
+
+    it('warns about missing targets and duplicates without discarding valid scenes', async () => {
+      writeDeckMd(markdown);
+      writeDeckYaml([
+        'scenes:',
+        '  - {name: Missing, slide: missing-slide}',
+        '  - {name: Opening, slide: introduction}',
+        '  - {name: Opening, slide: live-demo}',
+        '  - {name: Outside, slide: 3}',
+      ].join('\n'));
+
+      const result = await parseDeck(markdown, deckMdPath);
+
+      expect(result.error).to.equal(undefined);
+      expect(result.deck!.metadata.scenes).to.deep.equal([{ name: 'Opening', slide: 0 }]);
+      expect(result.warnings).to.deep.equal([
+        "[scenes] scenes[0]: no slide with id 'missing-slide'",
+        "[scenes] scenes[2]: duplicate scene name 'Opening'",
+        '[scenes] scenes[3]: slide 3 out of range [1, 2]',
+      ]);
+    });
+
+    it('warns when the sidecar scene list is not an array', async () => {
+      writeDeckMd(markdown);
+      writeDeckYaml('scenes: invalid');
+      const result = await parseDeck(markdown, deckMdPath);
+      expect(result.error).to.equal(undefined);
+      expect(result.deck!.metadata.scenes).to.deep.equal([]);
+      expect(result.warnings).to.deep.equal(['[scenes] scenes must be an array']);
+    });
+
+    it('matches scene resolution in YAML-primary decks', async () => {
+      writeDeckMd(markdown);
+      writeDeckYaml(sceneYaml);
+      const result = await parseDeck(markdown, deckMdPath);
+      const manifest = await parseDeck(`content: demo.deck.md\n${sceneYaml}`, path.join(tmpDir, 'manifest.deck.yaml'));
+      expect(manifest.error).to.equal(undefined);
+      expect(result.deck!.metadata.scenes).to.deep.equal(manifest.deck!.metadata.scenes);
+    });
+  });
+
   it('merges cues by heading-derived IDs without explicit anchors', async () => {
     deckMdPath = path.join(tmpDir, 'a.md');
     const markdown = '## Some Slide 1\n\nContent\n\n## Some Slide 2\n\nMore content';

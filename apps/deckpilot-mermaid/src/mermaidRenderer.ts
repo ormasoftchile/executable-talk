@@ -12,6 +12,7 @@ import {
   MERMAID_SUPPORTED_FENCE_LANGUAGES,
 } from './capabilities';
 import { resolveMermaidTheme, type MermaidThemeConfig } from './theme';
+import { mermaidAppearance } from '@deckpilot/core/renderer/mermaidAppearance';
 
 const runtimeRequire = createRequire(__filename);
 const MERMAID_RENDER_TIMEOUT_MS = 2_000;
@@ -63,6 +64,7 @@ type MermaidRendererDependencies = {
 };
 
 export class MermaidDiagramRenderer implements IDiagramRenderer {
+  readonly appearanceProtocol = 1 as const;
   readonly id = MERMAID_RENDERER_ID;
   readonly priority = MERMAID_RENDERER_PRIORITY;
   readonly supportedFenceLanguages = MERMAID_SUPPORTED_FENCE_LANGUAGES;
@@ -315,7 +317,7 @@ export class MermaidDiagramRenderer implements IDiagramRenderer {
     return {
       ok: true,
       format: 'svg',
-      svg: `<div class="diagram-block__mermaid-fallback" data-mermaid-source="${escapeAttr(Buffer.from(source, 'utf8').toString('base64'))}" data-mermaid-theme="${escapeAttr(theme.theme)}"><p>Mermaid diagram (will render in webview if offline rendering failed)</p></div>`,
+      svg: `<div class="diagram-block__mermaid-fallback" data-mermaid-source="${escapeAttr(Buffer.from(source, 'utf8').toString('base64'))}" data-mermaid-theme="${escapeAttr(theme.theme)}" data-mermaid-config="${escapeAttr(JSON.stringify(theme))}"><p>Mermaid diagram (will render in webview if offline rendering failed)</p></div>`,
       warnings: [reason],
       rendererId: this.id,
     };
@@ -326,6 +328,7 @@ function resolveRequestedTheme(
   fence: DiagramFenceInfo,
   options?: DiagramRenderOptions,
 ): MermaidThemeConfig {
+  if (options?.appearance) return mermaidAppearance(options.appearance);
   // Mirror the core/Triton precedence: an explicit per-fence theme wins;
   // otherwise use options.theme, which core already resolved from the
   // deck-wide diagrams.theme default and the editor fallback. The actual

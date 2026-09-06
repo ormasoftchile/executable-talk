@@ -2,20 +2,33 @@ import * as vscode from 'vscode';
 import type { DiagramBlockRef, DiagramRenderOptions } from '@deckpilot/core/models/diagram';
 import { DiagramRendererRegistry } from '../renderer/diagram/registry';
 import { diagramLog } from '../utils/diagramLogger';
+import { resolveExportAppearance, type ResolvedAppearance, type AppearancePreferences } from '@deckpilot/core/models/appearance';
+import type { DiagramDeckOptions } from '@deckpilot/core/models/deck';
 
 const LOADING_BLOCK_PATTERN = /<figure\b([^>]*\bclass="[^"]*\bdiagram-block--loading\b[^"]*"[^>]*)>([\s\S]*?)<\/figure>/g;
 
 export class DiagramService {
   constructor(private diagramRegistry: DiagramRendererRegistry) {}
 
-  async resolveSlideBlocks(slideHtml: string): Promise<Array<{ blockId: string; html: string }>> {
+  async resolveSlideBlocks(slideHtml: string, appearance?: ResolvedAppearance, defaults?: DiagramDeckOptions, externalFonts = true): Promise<Array<{ blockId: string; html: string }>> {
     const blocks = this.extractBlocks(slideHtml);
     diagramLog(`[diagram-service] resolveSlideBlocks: blocks = ${blocks.length}`);
 
     return Promise.all(blocks.map(async (block) => ({
       blockId: block.id,
-      html: await this.renderBlock(block),
+      html: await this.renderBlock(block, appearance, defaults, externalFonts),
     })));
+  }
+
+  async resolveExportBlocks(slideHtml: string, options: {
+    requested?: AppearancePreferences;
+    snapshot?: ResolvedAppearance;
+    current?: ResolvedAppearance;
+    diagrams?: DiagramDeckOptions;
+  } = {}): Promise<{ appearance: ResolvedAppearance; blocks: Array<{ blockId: string; html: string }> }> {
+    const appearance = resolveExportAppearance(options.requested, options.snapshot, options.current);
+    const blocks = await this.resolveSlideBlocks(slideHtml, appearance, { surface: 'opaque', ...options.diagrams }, false);
+    return { appearance, blocks };
   }
 
   private extractBlocks(slideHtml: string): DiagramBlockRef[] {
@@ -36,6 +49,9 @@ export class DiagramService {
       const theme = decodeMaybe(readAttr(attrs, 'data-diagram-theme'));
       const themeDefault = decodeMaybe(readAttr(attrs, 'data-diagram-theme-default'));
       const workspaceRoot = decodeMaybe(readAttr(attrs, 'data-diagram-workspace-root'));
+      const style = decodeMaybe(readAttr(attrs, 'data-diagram-style'));
+      const mode = decodeMaybe(readAttr(attrs, 'data-diagram-mode'));
+      const surface = decodeMaybe(readAttr(attrs, 'data-diagram-surface'));
       blocks.push({
         id,
         slideIndex: 0,
@@ -47,6 +63,7 @@ export class DiagramService {
             ...(theme ? { theme } : {}),
             ...(themeDefault ? { themeDefault } : {}),
             ...(workspaceRoot ? { workspaceRoot } : {}),
+            ...(style ? { style } : {}), ...(mode ? { mode } : {}), ...(surface ? { surface } : {}),
           },
         },
         position: { start: 0, end: source.length },
@@ -56,7 +73,7 @@ export class DiagramService {
     return blocks;
   }
 
-  private async renderBlock(block: DiagramBlockRef): Promise<string> {
+  private async renderBlock(block: DiagramBlockRef, appearance?: ResolvedAppearance, defaults?: DiagramDeckOptions, externalFonts = true): Promise<string> {
     diagramLog(`[diagram-service] rendering block ${block.id} ${block.fence.language}`);
 
     const attrs = block.fence.attributes;
@@ -66,17 +83,21 @@ export class DiagramService {
     const theme: DiagramRenderOptions['theme'] =
       fenceTheme && fenceTheme !== 'auto' ? fenceTheme
         : deckDefaultTheme && deckDefaultTheme !== 'auto' ? deckDefaultTheme
-          : resolveTheme();
+          : appearance ? undefined : resolveTheme();
     const workspaceRoot = attrs?.workspaceRoot ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
     try {
-      const result = await this.diagramRegistry.renderBlock(block, { theme, workspaceRoot });
+      const result = await this.diagramRegistry.renderBlock(block, { theme, workspaceRoot, appearance,
+        style: defaults?.style, mode: defaults?.mode, surface: defaults?.surface,
+        fontRevision: externalFonts ? appearance?.font.revision : undefined,
+      });
       if (result.ok && result.svg) {
         const caption = attrs?.caption ?? '';
         const captionHtml = caption
           ? `<figcaption class="diagram-block__caption">${escapeHtml(caption)}</figcaption>`
           : '';
-        return `<figure class="${buildDiagramClasses(block.fence.language)}" data-render-id="${block.id}" data-diagram-renderer="${result.rendererId}" data-diagram-language="${block.fence.language}">\
+        const warning = result.warnings?.length ? ` title="${escapeAttr(result.warnings.join(' '))}"` : '';
+        return `<figure class="${buildDiagramClasses(block.fence.language)}" data-render-id="${block.id}" data-diagram-renderer="${result.rendererId}" data-diagram-language="${block.fence.language}"${warning}>\
 <div class="diagram-block__viewport">${result.svg}</div>${captionHtml}</figure>`;
       }
 

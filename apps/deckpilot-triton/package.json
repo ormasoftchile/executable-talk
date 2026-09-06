@@ -45,6 +45,6 @@
     "typescript": "^5.3.2"
   },
   "dependencies": {
-    "@cristianormazabal/triton-core": "0.3.30"
+    "@cristianormazabal/triton-core": "0.3.31"
   }
 }

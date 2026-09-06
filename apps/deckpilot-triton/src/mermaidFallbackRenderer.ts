@@ -4,8 +4,10 @@ import type {
   DiagramRenderResult,
   IDiagramRenderer,
 } from '@deckpilot/core/renderer/diagramRenderer';
+import { mermaidAppearance } from '@deckpilot/core/renderer/mermaidAppearance';
 
 export class MermaidFallbackRenderer implements IDiagramRenderer {
+  readonly appearanceProtocol = 1 as const;
   readonly id = 'mermaid-js';
   readonly priority = 5;
   readonly supportedFenceLanguages = ['mermaid'] as const;
@@ -25,11 +27,12 @@ export class MermaidFallbackRenderer implements IDiagramRenderer {
         ? fence.attributes.theme
         : options?.theme,
     );
+    const config = options?.appearance ? mermaidAppearance(options.appearance) : { theme };
 
     return {
       ok: true,
       format: 'svg',
-      svg: `<div class="diagram-block__mermaid-fallback" data-mermaid-source="${escapeAttr(sourceBase64)}" data-mermaid-theme="${escapeAttr(theme)}"><div class="diagram-block__mermaid-status">Rendering with Mermaid.js…</div></div>`,
+      svg: `<div class="diagram-block__mermaid-fallback" data-mermaid-source="${escapeAttr(sourceBase64)}" data-mermaid-theme="${escapeAttr(theme)}" data-mermaid-config="${escapeAttr(JSON.stringify(config))}"><div class="diagram-block__mermaid-status">Rendering with Mermaid.js…</div></div>`,
       rendererId: this.id,
     };
   }

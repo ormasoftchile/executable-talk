@@ -6,10 +6,19 @@ import { PreviewProvider } from '../../../packages/extension/src/preview/preview
 import { DiagramRendererRegistry } from '../../../packages/extension/src/renderer/diagram/registry';
 
 describe('PreviewProvider', () => {
+  const originalConfiguration = vscode.workspace.getConfiguration;
+  beforeEach(() => {
+    (vscode.workspace as any).getConfiguration = () => ({ get: () => undefined });
+  });
+  afterEach(() => {
+    (vscode.workspace as any).getConfiguration = originalConfiguration;
+  });
+
   it('resolves diagram placeholders and posts renderBlockUpdate messages', async () => {
     const registry = new DiagramRendererRegistry();
     const renderer: IDiagramRenderer = {
       id: 'preview-renderer',
+      appearanceProtocol: 1,
       supportedFenceLanguages: ['mermaid'],
       render: async () => ({
         ok: true,

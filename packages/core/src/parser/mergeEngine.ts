@@ -131,6 +131,9 @@ export function mergeSidecarDeckMetadata(metadata: DeckMetadata, sidecar: Sideca
   const merged: DeckMetadata = { ...metadata };
 
   if (sidecar.deck) {
+    if (sidecar.deck.appearance !== undefined) {
+      merged.appearance = { ...sidecar.deck.appearance, ...(merged.appearance ?? {}) };
+    }
     if (sidecar.deck.title !== undefined && merged.title === undefined) {
       merged.title = sidecar.deck.title;
     }

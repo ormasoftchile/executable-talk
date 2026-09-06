@@ -41,10 +41,14 @@ function buildLoadingPlaceholder(block: DiagramBlockRef): string {
   const theme = block.fence.attributes?.theme?.trim();
   const captionAttr = caption ? ` data-diagram-caption="${escapeAttr(caption)}"` : '';
   const themeAttr = theme ? ` data-diagram-theme="${escapeAttr(theme)}"` : '';
+  const appearanceAttrs = ['style', 'mode', 'surface'].map(key => {
+    const value = block.fence.attributes?.[key]?.trim();
+    return value ? ` data-diagram-${key}="${escapeAttr(value)}"` : '';
+  }).join('');
 
   return (
     `<figure class="diagram-block diagram-block--loading" ` +
-    `data-render-id="${block.id}" data-diagram-language="${lang}"${captionAttr}${themeAttr}>` +
+    `data-render-id="${block.id}" data-diagram-language="${lang}"${captionAttr}${themeAttr}${appearanceAttrs}>` +
     // Fallback source shown until SVG arrives (or if no renderer is registered)
     `<pre class="diagram-block__source-fallback" data-no-fragment><code class="language-${lang}">${sourceEscaped}</code></pre>` +
     `</figure>`

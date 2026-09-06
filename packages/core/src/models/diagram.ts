@@ -31,6 +31,11 @@ export interface DiagramBlockRef {
 
 /** Options passed to a diagram renderer at render time. */
 export interface DiagramRenderOptions {
+  appearance?: import('./appearance').ResolvedAppearance;
+  style?: string;
+  mode?: 'inherit' | 'light' | 'dark';
+  surface?: 'auto' | 'opaque' | 'transparent';
+  fontRevision?: string;
   /** Resolved theme hint or renderer-specific explicit theme name. */
   theme?: string;
   /** Absolute path to the workspace root, if available. */
@@ -39,6 +44,14 @@ export interface DiagramRenderOptions {
 
 /** Result returned by a diagram renderer. Never throws — errors are returned as ok:false. */
 export interface DiagramRenderResult {
+  appearance?: {
+    style: string;
+    mode: 'light' | 'dark';
+    contrast: 'normal' | 'high';
+    canvas: string;
+    backgroundPainted: boolean;
+    hash: string;
+  };
   /** Whether rendering succeeded. */
   ok: boolean;
   /** Output format — always 'svg' in v1. */

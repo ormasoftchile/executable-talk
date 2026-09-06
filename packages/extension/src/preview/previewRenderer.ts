@@ -15,8 +15,11 @@ import { injectBlockElements } from '@deckpilot/core/renderer/blockElementRender
 import { parseRenderDirectives } from '@deckpilot/core/renderer/renderDirectiveParser';
 import type { RenderDirective } from '@deckpilot/core/renderer/renderDirectiveParser';
 import { peekCommandCache } from '../renderer/commandRenderer';
+import { appearanceCss, type ResolvedAppearance } from '@deckpilot/core/models/appearance';
 
 export interface RenderPreviewOptions {
+  appearance?: ResolvedAppearance;
+  fontsUri?: vscode.Uri;
   webview: vscode.Webview;
   cspSource: string;
   nonce: string;
@@ -36,20 +39,25 @@ export function renderPreviewHtml(deck: Deck, opts: RenderPreviewOptions): strin
   const notesToggle = hasNotes
     ? `<button type="button" class="preview-notes-toggle" id="notes-toggle" aria-pressed="true">Notes &amp; cues</button>`
     : '';
+  const deckTheme = ['light', 'dark', 'minimal', 'contrast'].includes(deck.metadata.theme ?? '')
+    ? deck.metadata.theme : 'auto';
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'unsafe-inline'; script-src 'nonce-${opts.nonce}' https://cdn.jsdelivr.net; img-src ${opts.cspSource} https: data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'unsafe-inline'; script-src 'nonce-${opts.nonce}' https://cdn.jsdelivr.net; font-src ${opts.cspSource} data:; img-src ${opts.cspSource} https: data:;">
   <link href="${opts.cssUri}" rel="stylesheet">
+  ${opts.fontsUri ? `<link href="${opts.fontsUri}" rel="stylesheet">` : ''}
+  <style id="appearance-tokens">${opts.appearance ? `.preview-body.adaptive-appearance .preview-slide-body{${appearanceCss(opts.appearance)}}` : ''}</style>
   <title>Preview: ${title}</title>
 </head>
-<body class="preview-body">
+<body class="preview-body${opts.appearance ? ' adaptive-appearance' : ''}" data-deck-theme="${opts.appearance ? 'auto' : deckTheme}">
   <header class="preview-header">
     <span class="preview-title">${title}</span>
     <span class="preview-meta">
+      ${opts.appearance ? '<button type="button" id="appearance-menu" class="preview-notes-toggle" title="Appearance">Appearance</button>' : ''}
       ${notesToggle}
       <span class="preview-count">${slideCount} slide${slideCount === 1 ? '' : 's'} &middot; live preview</span>
     </span>
@@ -62,6 +70,11 @@ export function renderPreviewHtml(deck: Deck, opts: RenderPreviewOptions): strin
   <script nonce="${opts.nonce}">
     (function () {
       var vscode = acquireVsCodeApi();
+      var appearanceRevision = ${opts.appearance?.revision ?? 0};
+      var appearanceMenu = document.getElementById('appearance-menu');
+      if (appearanceMenu) appearanceMenu.addEventListener('click', function () {
+        vscode.postMessage({ type: 'appearanceMenu' });
+      });
 
       // Initialize mermaid for client-side rendering of diagrams
       if (typeof mermaid !== 'undefined') {
@@ -111,6 +124,21 @@ export function renderPreviewHtml(deck: Deck, opts: RenderPreviewOptions): strin
       // Cursor follow: extension pushes { type: 'scrollToSlide', slideIndex } messages.
       window.addEventListener('message', function (event) {
         var msg = event.data || {};
+        if (msg.type === 'appearanceChanged' && msg.payload) {
+          var payload = msg.payload;
+          if (payload.appearance.revision < appearanceRevision) return;
+          appearanceRevision = payload.appearance.revision;
+          var scroll = document.documentElement.scrollTop;
+          for (var update of payload.blocks) {
+            var current = document.querySelector('[data-render-id="' + update.blockId + '"]');
+            if (current) current.outerHTML = update.html;
+          }
+          document.getElementById('appearance-tokens').textContent = '.preview-body.adaptive-appearance .preview-slide-body{' + payload.css + '}';
+          document.documentElement.scrollTop = scroll;
+          if (appearanceMenu) appearanceMenu.textContent = 'Appearance: ' + payload.appearance.mode;
+          renderFallbackMermaidDiagrams();
+          return;
+        }
         if (msg.type === 'scrollToSlide' && typeof msg.slideIndex === 'number') {
           var el = document.querySelector('.preview-slide[data-slide-index="' + msg.slideIndex + '"]');
           if (el && el.scrollIntoView) {
@@ -138,29 +166,28 @@ export function renderPreviewHtml(deck: Deck, opts: RenderPreviewOptions): strin
         }
       });
 
-      // Render mermaid fallback diagrams client-side
+      var mermaidQueue = Promise.resolve();
       function renderFallbackMermaidDiagrams() {
         if (typeof mermaid === 'undefined') return;
         var fallbacks = document.querySelectorAll('.diagram-block__mermaid-fallback[data-mermaid-source]');
         fallbacks.forEach(function (el) {
-          try {
-            var encoded = el.getAttribute('data-mermaid-source');
-            var theme = el.getAttribute('data-mermaid-theme') || 'auto';
-            if (!encoded) return;
-            var source = atob(encoded);
-            var id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
-            var svg = document.createElement('div');
-            svg.className = 'mermaid';
-            svg.setAttribute('data-theme', theme);
-            svg.textContent = source;
-            el.parentElement.replaceChild(svg, el);
-          } catch (err) {
-            console.error('Failed to render mermaid fallback:', err);
-          }
+          if (el.dataset.mermaidPending) return;
+          el.dataset.mermaidPending = 'true';
+          mermaidQueue = mermaidQueue.then(async function () {
+            if (!el.isConnected) return;
+            try {
+              var encoded = el.getAttribute('data-mermaid-source');
+              if (!encoded) return;
+              var source = new TextDecoder().decode(Uint8Array.from(atob(encoded), char => char.charCodeAt(0)));
+              var config = JSON.parse(el.getAttribute('data-mermaid-config') || '{}');
+              mermaid.initialize({ ...config, startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true });
+              var result = await mermaid.render('mermaid-' + Math.random().toString(36).slice(2), source);
+              if (el.isConnected) el.innerHTML = result.svg || result;
+            } catch (error) {
+              el.textContent = 'Diagram render failed: ' + error.message;
+            }
+          });
         });
-        if (typeof mermaid !== 'undefined' && mermaid.contentLoaded) {
-          mermaid.contentLoaded();
-        }
       }
 
       // Initial render of any fallback diagrams on load

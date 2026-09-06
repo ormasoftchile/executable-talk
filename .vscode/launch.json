@@ -11,6 +11,7 @@
         "--disable-extension=GitHub.copilot",
         "--disable-extension=GitHub.copilot-chat",
         "--extensionDevelopmentPath=${workspaceFolder}",
+        "--extensionDevelopmentPath=${workspaceFolder}/apps/deckpilot-triton",
         "${workspaceFolder}/examples/video-workflow/video-workflow.code-workspace"
       ],
       "outFiles": [
@@ -28,6 +29,7 @@
         "--disable-extension=GitHub.copilot",
         "--disable-extension=GitHub.copilot-chat",
         "--extensionDevelopmentPath=${workspaceFolder}",
+        "--extensionDevelopmentPath=${workspaceFolder}/apps/deckpilot-triton",
         "${workspaceFolder}/examples/video-workflow/video-workflow.code-workspace"
       ],
       "outFiles": [
