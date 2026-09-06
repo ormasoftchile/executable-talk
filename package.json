@@ -7,7 +7,7 @@
   ],
   "displayName": "Deckpilot — Executable Markdown Presentations",
   "description": "Executable markdown presentations with live code demonstrations, recording, onboarding flows, and automated narration scripting. Formerly Executable Talk.",
-  "version": "0.13.18",
+  "version": "0.13.19",
   "publisher": "focus-space",
   "license": "MIT",
   "repository": {
