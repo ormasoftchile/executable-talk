@@ -1,0 +1,28 @@
+name: Fetch Published Release Dependency
+on:
+  push:
+    branches: [release/adaptive-appearance]
+    paths: [.github/workflows/release-dependency.yml]
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - name: Fetch published compiler and update lock
+        run: |
+          npm install --package-lock-only --ignore-scripts --workspace deckpilot-triton @cristianormazabal/triton-core@0.3.31 --save-exact --no-audit --no-fund
+          mkdir dependency-artifact
+          npm pack @cristianormazabal/triton-core@0.3.31 --pack-destination dependency-artifact
+          npm view @cristianormazabal/triton-core@0.3.31 dist --json > dependency-artifact/dist.json
+          cp package-lock.json dependency-artifact/package-lock.json
+          cp apps/deckpilot-triton/package.json dependency-artifact/triton-package.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: published-triton-dependency
+          path: dependency-artifact
