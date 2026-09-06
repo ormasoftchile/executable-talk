@@ -7,7 +7,7 @@
   ],
   "displayName": "Deckpilot — Executable Markdown Presentations",
   "description": "Executable markdown presentations with live code demonstrations, recording, onboarding flows, and automated narration scripting. Formerly Executable Talk.",
-  "version": "0.13.19",
+  "version": "0.13.20",
   "publisher": "focus-space",
   "license": "MIT",
   "repository": {
@@ -178,15 +178,34 @@
       "title": "Deckpilot",
       "properties": {
         "deckPilot.appearance.style": {
-          "type": "string", "default": "default", "enum": ["default"], "scope": "resource",
+          "type": "string",
+          "default": "default",
+          "enum": [
+            "default"
+          ],
+          "scope": "resource",
           "description": "Default visual family for decks without an authored appearance."
         },
         "deckPilot.appearance.mode": {
-          "type": "string", "default": "auto", "enum": ["auto", "light", "dark"], "scope": "resource",
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "light",
+            "dark"
+          ],
+          "scope": "resource",
           "description": "Default deck color mode. Auto follows this VS Code window."
         },
         "deckPilot.appearance.contrast": {
-          "type": "string", "default": "auto", "enum": ["auto", "normal", "high"], "scope": "resource",
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "normal",
+            "high"
+          ],
+          "scope": "resource",
           "description": "Default deck contrast. Auto honors the editor's accessibility theme."
         },
         "deckPilot.treatAllMarkdownAsDeck": {
