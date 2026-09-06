@@ -31,6 +31,7 @@
     "bundle:watch": "node esbuild.mjs --watch",
     "build": "npm run bundle && npm run vendor-triton",
     "vendor-triton": "node scripts/vendor-triton.mjs",
+    "test:runtime": "node --test test/runtime/tritonRuntime.test.mjs",
     "test": "mocha --require test/unit/helpers/vscode-mock.cjs --require ts-node/register 'test/unit/**/*.test.ts'"
   },
   "devDependencies": {
@@ -44,6 +45,6 @@
     "typescript": "^5.3.2"
   },
   "dependencies": {
-    "@cristianormazabal/triton-core": "^0.1.30"
+    "@cristianormazabal/triton-core": "0.3.30"
   }
 }
