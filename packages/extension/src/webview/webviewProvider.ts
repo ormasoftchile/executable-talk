@@ -78,6 +78,7 @@ export class WebviewProvider implements vscode.Disposable {
   private currentDeck: Deck | undefined;
   private appearanceRequest = 0;
   private appearanceAcks = new Map<number, () => void>();
+  private recordingLayoutRequest = 0;
 
   constructor(private readonly extensionUri: vscode.Uri, private readonly appearanceService?: AppearanceService) {}
 
@@ -161,6 +162,40 @@ export class WebviewProvider implements vscode.Disposable {
   close(): void {
     this.panel?.dispose();
     this.panel = undefined;
+  }
+
+  async prepareRecordingLayout(
+    slides: Array<{ slideHtml: string; diagramBlocks: Array<{ blockId: string; html: string }> }>,
+  ): Promise<import('../recording/autoPilot').AutoPilotSlideLayout[]> {
+    if (!this.panel) {
+      throw new Error('Open a presentation before preparing recording layout.');
+    }
+    const requestId = ++this.recordingLayoutRequest;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        subscription.dispose();
+        reject(new Error('Timed out preparing recording reveal layout.'));
+      }, 10000);
+      const subscription = this.panel!.webview.onDidReceiveMessage((message: {
+        type?: string; requestId?: number; layouts?: import('../recording/autoPilot').AutoPilotSlideLayout[];
+      }) => {
+        if (message?.type !== 'recordingLayoutPrepared' || message.requestId !== requestId) {
+          return;
+        }
+        clearTimeout(timer);
+        subscription.dispose();
+        const layouts = message.layouts;
+        if (!Array.isArray(layouts) || layouts.length !== slides.length || layouts.some(layout =>
+          !layout || !Number.isInteger(layout.fragmentCount) || layout.fragmentCount < 0 ||
+          !layout.actionFragments || typeof layout.actionFragments !== 'object' ||
+          Object.values(layout.actionFragments).some(index => !Number.isInteger(index) || index < 1 || index > layout.fragmentCount))) {
+          reject(new Error('Invalid recording reveal layout.'));
+          return;
+        }
+        resolve(layouts);
+      });
+      this.postMessage({ type: 'prepareRecordingLayout', payload: { requestId, slides } });
+    });
   }
 
   /**
@@ -364,6 +399,9 @@ export class WebviewProvider implements vscode.Disposable {
   }
 
   private handleMessage(message: unknown): void {
+    if (message && typeof message === 'object' && 'type' in message && message.type === 'recordingLayoutPrepared') {
+      return;
+    }
     if (message && typeof message === 'object' && 'type' in message && message.type === 'appearanceApplied'
       && 'requestId' in message && typeof message.requestId === 'number') {
       this.appearanceAcks.get(message.requestId)?.();

@@ -484,7 +484,15 @@ export interface AppearanceChangedMessage {
   };
 }
 
-export type HostToWebviewMessage = AppearanceChangedMessage
+export interface PrepareRecordingLayoutMessage {
+  type: 'prepareRecordingLayout';
+  payload: {
+    requestId: number;
+    slides: Array<{ slideHtml: string; diagramBlocks: Array<{ blockId: string; html: string }> }>;
+  };
+}
+
+export type HostToWebviewMessage = PrepareRecordingLayoutMessage | AppearanceChangedMessage
   | SlideChangedMessage
   | ActionStatusChangedMessage
   | DeckLoadedMessage

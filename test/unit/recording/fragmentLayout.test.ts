@@ -19,6 +19,26 @@ describe('fragment layout stability', () => {
     }
   });
 
+  it('animates slide-up inside the clipped diagram instead of moving its outer box', () => {
+    const dom = new JSDOM(`<style>${css}</style><div id="slide-content">
+      <figure class="diagram-block fragment" data-fragment-animation="slide-up">
+        <div class="diagram-block__viewport"><svg></svg></div>
+      </figure>
+    </div>`);
+    try {
+      const figure = dom.window.document.querySelector('figure');
+      const viewport = dom.window.document.querySelector('.diagram-block__viewport');
+      expect(dom.window.getComputedStyle(figure).transform).to.equal('none');
+      expect(dom.window.getComputedStyle(figure).overflow).to.equal('hidden');
+      expect(dom.window.getComputedStyle(viewport).transform).to.equal('translateY(30px)');
+      figure.classList.add('visible');
+      expect(dom.window.getComputedStyle(figure).transform).to.equal('none');
+      expect(dom.window.getComputedStyle(viewport).transform).to.equal('translateY(0)');
+    } finally {
+      dom.window.close();
+    }
+  });
+
   it('keeps diagram layout participation unchanged across fragment visibility', () => {
     const dom = new JSDOM(`<style>${css}</style><div id="slide-content">
       <h1>Title</h1><figure class="diagram-block fragment" data-fragment-animation="slide-up"></figure>

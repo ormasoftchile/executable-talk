@@ -34,12 +34,29 @@ function harness() {
     requestAnimationFrame: (callback: () => void) => frames.push(callback),
   };
   vm.createContext(context);
-  vm.runInContext(['preserveRenderBlockState', 'syncPreservedAttributes', 'handleSlideChanged', 'handleDeckLoaded']
+  vm.runInContext(['preserveRenderBlockState', 'syncPreservedAttributes', 'stageSlideContent', 'prepareRecordingLayout', 'expandTritonRevealFragments', 'renumberFragments', 'handleSlideChanged', 'handleDeckLoaded']
     .map(implementation).join('\n'), context);
   return { context, content, events, posted, frames, dom };
 }
 
 describe('slide first paint', () => {
+  it('preflights diagram reveals and sidecar buttons without changing the visible slide', () => {
+    const { context, content, posted, frames } = harness();
+    context.prepareRecordingLayout({ requestId: 7, slides: [{
+      slideHtml: '<h1>Demo</h1><figure data-render-id="diagram"><svg><g id="first"></g><g id="second"></g>' +
+        '<script id="triton-reveal" type="application/json">{"steps":[{"index":1,"enter":["first"]},{"index":2,"enter":["second"]}]}</script></svg></figure>' +
+        '<p class="fragment"><a data-action-id="preview">Show preview</a></p>',
+      diagramBlocks: [],
+    }] });
+    expect(posted).to.have.length(1);
+    expect(posted[0]).to.deep.equal({ type: 'recordingLayoutPrepared', requestId: 7, layouts: [
+      { fragmentCount: 3, actionFragments: { preview: 3 } },
+    ] });
+    expect(content.innerHTML).to.equal('<h1>Previous slide</h1>');
+    expect(frames).to.have.length(0);
+    expect(context.currentSlide).to.equal(0);
+  });
+
   it('does not paint slide content from deckLoaded or startup before host navigation', () => {
     const { context, content } = harness();
     context.handleDeckLoaded({ payload: { totalSlides: 2 } });

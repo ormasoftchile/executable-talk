@@ -10,7 +10,7 @@ interface FragmentStub {
 
 const source = fs.readFileSync(path.resolve(__dirname,
   '../../../packages/extension/src/webview/assets/presentation.js'), 'utf8');
-const start = source.indexOf('  function renumberFragments()');
+const start = source.indexOf('  function renumberFragments(');
 const implementation = source.slice(start, source.indexOf('  /**', start));
 
 function numberFragments(keys: Array<string | null>): { count: number; indexes: number[] } {

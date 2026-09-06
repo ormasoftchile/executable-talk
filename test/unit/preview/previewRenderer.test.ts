@@ -57,6 +57,24 @@ const opts = {
 };
 
 describe('renderPreviewHtml', () => {
+  it('renders preloaded diagrams at startup without waiting for network scripts', () => {
+    const { JSDOM } = require('jsdom');
+    const deck = makeDeck([makeSlide(0, { content: '', html: '<figure data-render-id="diagram-0-0" class="diagram-block--loading"></figure>' })]);
+    const html = renderPreviewHtml(deck, { ...opts, initialBlocks: [{
+      blockId: 'diagram-0-0', html: '<figure><svg><text>Ready preview</text></svg></figure>',
+    }] });
+    const dom = new JSDOM(html, { runScripts: 'outside-only' });
+    try {
+      dom.window.acquireVsCodeApi = () => ({ getState: () => ({}), postMessage: () => {} });
+      dom.window.eval(dom.window.document.querySelector('script[nonce]').textContent);
+      expect(dom.window.document.querySelector('.diagram-block--loading')).to.equal(null);
+      expect(dom.window.document.querySelector('svg text').textContent).to.equal('Ready preview');
+      expect(dom.window.document.querySelector('script[src]').defer).to.equal(true);
+    } finally {
+      dom.window.close();
+    }
+  });
+
   it('exposes the declared deck theme without using arbitrary values as CSS', () => {
     for (const theme of ['light', 'dark', 'minimal', 'contrast'] as const) {
       const deck = makeDeck([]);

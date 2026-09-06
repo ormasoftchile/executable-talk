@@ -48,7 +48,7 @@ const DEFAULT_CONFIG: AutoPilotConfig = {
  */
 export interface AutoPilotStep {
   /** What to do */
-  type: 'advance' | 'trigger-action' | 'wait' | 'close-panel' | 'refocus' | 'play-video';
+  type: 'advance' | 'trigger-action' | 'wait' | 'close-panel' | 'refocus' | 'restore-editors' | 'play-video';
   /** How long to wait after this step (ms) */
   durationMs: number;
   /** Slide index this step belongs to */
@@ -57,6 +57,7 @@ export interface AutoPilotStep {
   fragmentIndex?: number;
   /** Action ID, if this step triggers an action */
   actionId?: string;
+  restoreEditors?: boolean;
   /** Description for logging */
   label: string;
   /** Intentional start on the published presentation timeline. */
@@ -72,6 +73,11 @@ export interface NarrationTiming {
   text: string;
   /** Measured duration of the processed narration take. */
   durationMs: number;
+}
+
+export interface AutoPilotSlideLayout {
+  fragmentCount: number;
+  actionFragments: Record<string, number>;
 }
 
 /**
@@ -90,6 +96,7 @@ export function buildAutoPilotPlan(
   config: Partial<AutoPilotConfig> = {},
   narrationTimings: readonly NarrationTiming[] = [],
   videoDurations: ReadonlyMap<number, number> = new Map(),
+  renderedLayouts: readonly AutoPilotSlideLayout[] = [],
 ): AutoPilotStep[] {
   const cfg = resolveAutoPilotConfig(config);
   const cues = parseCues(slides);
@@ -105,7 +112,8 @@ export function buildAutoPilotPlan(
   });
 
   for (let si = 0; si < slides.length; si++) {
-    const slide = slides[si];
+    const layout = renderedLayouts[si];
+    const slide = layout ? { ...slides[si], fragmentCount: layout.fragmentCount } : slides[si];
 
     if (si > 0) {
       // Advance to this slide
@@ -200,7 +208,9 @@ export function buildAutoPilotPlan(
       // Map action.id → data-fragment index as assigned by processFragments.
       // Elements with data-no-fragment (fragment: false) are absent from the map
       // and will be triggered at slide-entry level (already visible on load).
-      const fragMap = extractElementFragmentMap(slide.html);
+      const fragMap = layout
+        ? new Map(Object.entries(layout.actionFragments))
+        : extractElementFragmentMap(slide.html);
 
       // Elements not enclosed in any fragment → fire after slide-level wait
       const entryElements = allElements.filter(el => !fragMap.has(el.action.id));
@@ -368,7 +378,7 @@ function extractElementFragmentMap(html: string): Map<string, number> {
  */
 function addActionSteps(
   steps: AutoPilotStep[],
-  el: { action: { id: string; type: string }; label: string },
+  el: { action: { id: string; type: string; params?: Record<string, unknown> }; label: string },
   slideIndex: number,
   fragmentIndex: number | undefined,
   cfg: AutoPilotConfig,
@@ -376,12 +386,15 @@ function addActionSteps(
   measuredDurationMs?: number,
   cueIndex?: number,
 ): void {
+  const editorDemo = el.action.params?.autoRecord as { viewMs?: number; returnToDeck?: boolean } | undefined;
+  const restoreEditors = editorDemo?.returnToDeck === true;
   steps.push({
     type: 'trigger-action',
     durationMs: 0,
     slideIndex,
     fragmentIndex,
     actionId: el.action.id,
+    ...(restoreEditors ? { restoreEditors: true } : {}),
     label: `Execute action: ${el.label}`,
   });
 
@@ -393,7 +406,17 @@ function addActionSteps(
     ? [{ cueIndex, offsetMs: 0 }]
     : undefined;
 
-  if (el.action.type === 'terminal.run') {
+  if (restoreEditors) {
+    const requestedMs = typeof editorDemo?.viewMs === 'number' && Number.isFinite(editorDemo.viewMs) && editorDemo.viewMs >= 0
+      ? editorDemo.viewMs : cfg.fileViewMs;
+    steps.push({
+      type: 'restore-editors',
+      durationMs: Math.max(requestedMs, cueMs),
+      slideIndex,
+      label: `View demo (${el.label}) then return to deck`,
+      narrationCues,
+    });
+  } else if (el.action.type === 'terminal.run') {
     // Let the terminal command execute and output be visible
     steps.push({
       type: 'wait',
