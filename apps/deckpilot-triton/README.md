@@ -64,7 +64,7 @@ This extension lives inside the deckpilot monorepo at `apps/deckpilot-triton/`. 
 
 ### Prerequisites
 
-- Triton built at `../triton/packages/core/dist/` — run `pnpm build` in the triton project
+- Run `npm ci` from the monorepo root to install the pinned Triton compiler (`0.3.30`).
 - Node 20+
 
 ### Vendor Triton for local development
@@ -75,6 +75,11 @@ npm run vendor-triton
 
 This builds a self-contained Triton Mermaid bundle into `dist/vendor/triton/`
 where the adapter loads it at runtime via dynamic `import()`.
+
+Normal builds use the installed npm package. A sibling Triton checkout is not
+required. For intentional local compiler development, build that checkout and
+set `TRITON_LOCAL=1`, or point `TRITON_CORE_DIST` at its `packages/core/dist/`.
+Unset these overrides before validating a release build.
 
 ### Run
 
@@ -89,8 +94,15 @@ cd apps/deckpilot-triton && npm run build  # build deckpilot-triton + vendor Tri
 ### Test
 
 ```sh
-cd apps/deckpilot-triton && npm test
+cd apps/deckpilot-triton
+npm test
+npm run build
+npm run test:runtime
 ```
+
+The runtime tests exercise the actual vendored compiler: animated flowchart
+edges, themed architecture diagrams, all progressive list shapes, and nested
+poster reveals. They also run in the root Windows/Linux CI matrix.
 
 ## Architecture
 

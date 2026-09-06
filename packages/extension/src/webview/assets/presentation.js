@@ -505,7 +505,7 @@
    * Assign 1-based data-fragment indices to every `.fragment` in the current
    * slide, in document order. Triton reveal steps that span multiple `<g>`
    * groups (via `group N` or `+` joins) carry a shared `data-triton-step-key`;
-   * consecutive fragments with the same key share ONE index so the whole group
+  * fragments with the same key share ONE index so the whole group
    * reveals on a single Space press. Non-triton fragments (no step key) always
    * get their own sequential index, reproducing the parse-time numbering.
    * Returns the number of distinct reveal steps.
@@ -513,14 +513,16 @@
   function renumberFragments() {
     const fragments = slideContent.querySelectorAll('.fragment');
     let index = 0;
-    let prevKey = null;
+    const stepIndices = new Map();
     for (let i = 0; i < fragments.length; i++) {
       const key = fragments[i].getAttribute('data-triton-step-key');
-      if (!(key && key === prevKey)) {
+      if (key && stepIndices.has(key)) {
+        fragments[i].setAttribute('data-fragment', String(stepIndices.get(key)));
+      } else {
         index++;
+        if (key) stepIndices.set(key, index);
+        fragments[i].setAttribute('data-fragment', String(index));
       }
-      fragments[i].setAttribute('data-fragment', String(index));
-      prevKey = key;
     }
     return index;
   }

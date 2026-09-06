@@ -73,6 +73,9 @@ jobs:
     - name: Run unit tests
       run: npm run test:unit
 
+    - name: Test bundled Triton integration
+      run: npm --workspace deckpilot-triton run test:runtime
+
   build:
     name: Build Extension
     runs-on: ubuntu-latest
