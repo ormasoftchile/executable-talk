@@ -2131,6 +2131,19 @@ body.theme-light #slide-content .diagram-block[data-diagram-renderer="triton"]:n
   align-items: flex-start;
 }
 
+#slide-content .diagram-block.fragment[data-fragment-animation="slide-up"] {
+  transform: none;
+}
+
+#slide-content .diagram-block.fragment[data-fragment-animation="slide-up"] .diagram-block__viewport {
+  transform: translateY(30px);
+  transition: transform 0.4s ease;
+}
+
+#slide-content .diagram-block.fragment[data-fragment-animation="slide-up"].visible .diagram-block__viewport {
+  transform: translateY(0);
+}
+
 #slide-content .diagram-block svg {
   display: block;
   width: 100%;

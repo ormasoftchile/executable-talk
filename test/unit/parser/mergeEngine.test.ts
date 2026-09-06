@@ -372,6 +372,23 @@ describe('mergeSidecarDeckMetadata', () => {
     });
   });
 
+  describe('basePath merging', () => {
+    it('applies a deck-relative base path from the sidecar', () => {
+      const metadata: DeckMetadata = {};
+      const sidecar: SidecarFile = { deck: { basePath: '.' } };
+      const result = mergeSidecarDeckMetadata(metadata, sidecar);
+      expect(result.basePath).to.equal('.');
+      expect(metadata.basePath).to.equal(undefined);
+    });
+
+    it('preserves an inline base path over the sidecar value', () => {
+      const metadata: DeckMetadata = { basePath: '../examples' };
+      const sidecar: SidecarFile = { deck: { basePath: '.' } };
+      const result = mergeSidecarDeckMetadata(metadata, sidecar);
+      expect(result.basePath).to.equal('../examples');
+    });
+  });
+
   describe('theme merging', () => {
     it('applies sidecar theme when metadata has none', () => {
       const metadata: DeckMetadata = {};

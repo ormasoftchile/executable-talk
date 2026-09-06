@@ -18,6 +18,7 @@ import { peekCommandCache } from '../renderer/commandRenderer';
 import { appearanceCss, type ResolvedAppearance } from '@deckpilot/core/models/appearance';
 
 export interface RenderPreviewOptions {
+  initialBlocks?: Array<{ blockId: string; html: string }>;
   appearance?: ResolvedAppearance;
   fontsUri?: vscode.Uri;
   webview: vscode.Webview;
@@ -66,7 +67,7 @@ export function renderPreviewHtml(deck: Deck, opts: RenderPreviewOptions): strin
   <main class="preview-slides">
     ${slidesHtml}
   </main>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script nonce="${opts.nonce}">
     (function () {
       var vscode = acquireVsCodeApi();
@@ -191,6 +192,15 @@ export function renderPreviewHtml(deck: Deck, opts: RenderPreviewOptions): strin
       }
 
       // Initial render of any fallback diagrams on load
+      var initialBlocks = ${JSON.stringify(opts.initialBlocks ?? []).replace(/</g, '\\u003c')};
+      for (var update of initialBlocks) {
+        var block = document.querySelector('[data-render-id="' + update.blockId + '"]');
+        if (block) block.outerHTML = update.html;
+      }
+      window.addEventListener('load', function () {
+        if (typeof mermaid !== 'undefined') mermaid.contentLoaded();
+        renderFallbackMermaidDiagrams();
+      });
       setTimeout(function () { renderFallbackMermaidDiagrams(); }, 100);
     })();
   </script>

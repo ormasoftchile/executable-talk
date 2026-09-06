@@ -17,6 +17,7 @@ interface AutoRecordHarness {
     stopRecording(slideIndex?: number): undefined;
   };
   currentSlideIndex: number;
+  webviewProvider: { prepareRecordingLayout(): Promise<[]> };
   startRecording(): Promise<void>;
   autoRecord: Conductor['autoRecord'];
   isAutoPilotActive: Conductor['isAutoPilotActive'];
@@ -61,6 +62,7 @@ describe('Conductor Auto-Record lifecycle', () => {
       stopRecording: () => undefined,
     };
     harness.currentSlideIndex = 0;
+    harness.webviewProvider = { prepareRecordingLayout: async () => [] };
     let startupAttempts = 0;
     harness.startRecording = async () => {
       startupAttempts++;

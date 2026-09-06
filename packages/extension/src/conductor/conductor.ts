@@ -149,6 +149,11 @@ export class Conductor implements vscode.Disposable {
   private recorderOrchestrator: RecorderOrchestrator | undefined;
   private recordingOutputDirectory: string | undefined;
   private autoPilotRunning = false;
+  private editorDemo: {
+    existingTabs: Set<vscode.Tab>;
+    openedTabs?: vscode.Tab[];
+    layout: unknown;
+  } | undefined;
   private slideRenderVersion = 0;
   private pendingVideoNarrationCues = new Map<
     number,
@@ -1075,12 +1080,22 @@ export class Conductor implements vscode.Disposable {
       );
     }
 
+    const layoutSlides = await Promise.all(this.deck.slides.map(async slide => {
+      const slideHtml = annotateDiagramPlaceholders(this.resolveSlideRenderDirectives(slide), this.resolvedBasePath(), this.deck!.metadata.diagrams?.theme);
+      const diagramBlocks = slide.diagramBlocks?.length
+        ? await this.diagramService.resolveSlideBlocks(slideHtml, this.appearanceService.get(this.deck!), this.deck!.metadata.diagrams)
+        : [];
+      return { slideHtml, diagramBlocks };
+    }));
+    const renderedLayouts = await this.webviewProvider.prepareRecordingLayout(layoutSlides);
+
     // Build the plan from slides
     const plan = buildAutoPilotPlan(
       this.deck.slides,
       this.autoPilotConfig,
       narrationTimings,
       videoDurations,
+      renderedLayouts,
     );
     this.pendingVideoNarrationCues = new Map(
       plan
@@ -1141,8 +1156,51 @@ export class Conductor implements vscode.Disposable {
     }
   }
 
+  private async beginEditorDemo(): Promise<void> {
+    await this.restoreEditorDemo();
+    this.editorDemo = {
+      existingTabs: new Set(vscode.window.tabGroups.all.flatMap(group => group.tabs)),
+      layout: await vscode.commands.executeCommand('vscode.getEditorLayout'),
+    };
+  }
+
+  private captureEditorDemoTabs(): void {
+    const demo = this.editorDemo;
+    if (demo) {
+      demo.openedTabs = vscode.window.tabGroups.all.flatMap(group => group.tabs)
+        .filter(tab => !demo.existingTabs.has(tab));
+    }
+  }
+
+  private async restoreEditorDemo(): Promise<void> {
+    const demo = this.editorDemo;
+    if (!demo) {
+      return;
+    }
+    if (!demo.openedTabs) {
+      this.captureEditorDemoTabs();
+    }
+    this.editorDemo = undefined;
+    try {
+      const currentTabs = new Set(vscode.window.tabGroups.all.flatMap(group => group.tabs));
+      const toClose = (demo.openedTabs ?? []).filter(tab => currentTabs.has(tab) && !tab.isDirty);
+      if (toClose.length > 0) {
+        await vscode.window.tabGroups.close(toClose, true);
+      }
+      const remaining = vscode.window.tabGroups.all.flatMap(group => group.tabs);
+      if (demo.layout && remaining.every(tab => demo.existingTabs.has(tab))) {
+        await vscode.commands.executeCommand('vscode.setEditorLayout', demo.layout);
+      }
+    } catch (error) {
+      this.outputChannel.appendLine(`[AutoPilot] Editor demo cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.webviewProvider.reveal();
+    }
+  }
+
   private async cleanupAutoPilotRun(): Promise<void> {
     this.autoPilotRunning = false;
+    await this.restoreEditorDemo();
     this.pendingVideoNarrationCues.clear();
     this.narrationTimings = [];
 
@@ -1201,6 +1259,9 @@ export class Conductor implements vscode.Disposable {
 
       case 'trigger-action':
         if (step.actionId) {
+          if (step.restoreEditors) {
+            await this.beginEditorDemo();
+          }
           try {
             await this.handleExecuteAction(step.actionId);
           } catch (e) {
@@ -1208,6 +1269,17 @@ export class Conductor implements vscode.Disposable {
           }
           // Give the UI time to settle after the action
           await this.delay(this.autoPilotConfig.postActionMs);
+          if (step.restoreEditors) {
+            this.captureEditorDemoTabs();
+          }
+        }
+        break;
+
+      case 'restore-editors':
+        try {
+          await this.delay(step.durationMs);
+        } finally {
+          await this.restoreEditorDemo();
         }
         break;
 
@@ -1929,7 +2001,7 @@ export class Conductor implements vscode.Disposable {
         isWorkspaceTrusted: isTrusted(),
         cancellationToken: this.cancellationTokenSource.token,
         outputChannel: this.outputChannel,
-        autoPilotMode: this.autoPilotRunning,
+        autoPilotMode: this.autoPilotRunning && !this.editorDemo,
       };
 
       const result = await executor.execute(executionAction, context);

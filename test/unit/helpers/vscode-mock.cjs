@@ -13,6 +13,9 @@
 const Module = require('module');
 
 const vscodeMock = {
+  commands: {
+    executeCommand: async () => undefined,
+  },
   workspace: {
     workspaceFolders: undefined,
     textDocuments: [],

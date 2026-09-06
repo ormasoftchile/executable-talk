@@ -281,6 +281,9 @@
       const message = event.data;
       
       switch (message.type) {
+        case 'prepareRecordingLayout':
+          prepareRecordingLayout(message.payload);
+          break;
         case 'appearanceChanged':
           handleAppearanceChanged(message.payload);
           break;
@@ -521,8 +524,8 @@
    * get their own sequential index, reproducing the parse-time numbering.
    * Returns the number of distinct reveal steps.
    */
-  function renumberFragments() {
-    const fragments = slideContent.querySelectorAll('.fragment');
+  function renumberFragments(root) {
+    const fragments = (root || slideContent).querySelectorAll('.fragment');
     let index = 0;
     const stepIndices = new Map();
     for (let i = 0; i < fragments.length; i++) {
@@ -762,8 +765,7 @@
   /**
    * Message handlers
    */
-  function handleSlideChanged(message) {
-    const payload = message.payload || message;
+  function stageSlideContent(payload) {
     const staged = document.createElement('div');
     staged.innerHTML = payload.slideHtml || payload.slideContent || slides[payload.slideIndex]?.content || '';
     for (const update of payload.diagramBlocks || []) {
@@ -774,6 +776,27 @@
         if (template.firstElementChild) preserveRenderBlockState(block, template.firstElementChild, update.blockId);
       }
     }
+    return staged;
+  }
+
+  function prepareRecordingLayout(payload) {
+    const layouts = payload.slides.map(function (slide) {
+      const staged = stageSlideContent(slide);
+      expandTritonRevealFragments(staged);
+      const fragmentCount = renumberFragments(staged);
+      const actionFragments = Object.create(null);
+      for (const action of staged.querySelectorAll('[data-action-id]')) {
+        const fragment = action.closest('.fragment');
+        if (fragment) actionFragments[action.dataset.actionId] = Number(fragment.dataset.fragment);
+      }
+      return { fragmentCount, actionFragments };
+    });
+    vscode.postMessage({ type: 'recordingLayoutPrepared', requestId: payload.requestId, layouts });
+  }
+
+  function handleSlideChanged(message) {
+    const payload = message.payload || message;
+    const staged = stageSlideContent(payload);
     if (payload.appearance) {
       appearanceRevision = payload.appearance.revision || 0;
       document.body.style.cssText = payload.appearanceCss || '';

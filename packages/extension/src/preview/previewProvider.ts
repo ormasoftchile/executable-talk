@@ -74,7 +74,7 @@ export class PreviewProvider implements vscode.Disposable {
     }
 
     this.panel.title = previewTitle(deckUri);
-    await this.refresh();
+    await this.refresh(true);
   }
 
   private attachDocumentListener(): void {
@@ -181,7 +181,7 @@ export class PreviewProvider implements vscode.Disposable {
     }, DEBOUNCE_MS);
   }
 
-  private async refresh(): Promise<void> {
+  private async refresh(waitForDiagrams = false): Promise<void> {
     if (!this.panel || !this.deckUri) {
       return;
     }
@@ -224,13 +224,22 @@ export class PreviewProvider implements vscode.Disposable {
       slide.html = annotateDiagramPlaceholders(slide.html, workspaceRoot, diagramThemeDefault);
     }
 
+    const refreshVersion = ++this.refreshVersion;
+    const initialBlocks = waitForDiagrams
+      ? (await Promise.all(result.deck.slides.map(slide => this.diagramService.resolveSlideBlocks(slide.html, appearance, result.deck!.metadata.diagrams)))).flat()
+      : undefined;
+    if (!this.panel || refreshVersion !== this.refreshVersion) {
+      return;
+    }
     this.panel.webview.html = renderPreviewHtml(result.deck, {
       ...renderOpts,
       warnings: [...(result.warnings ?? []), ...appearance.warnings],
       appearance,
+      initialBlocks,
     });
-    const refreshVersion = ++this.refreshVersion;
-    void this.resolvePreviewDiagrams(result.deck.slides.map((slide) => slide.html), refreshVersion);
+    if (!waitForDiagrams) {
+      void this.resolvePreviewDiagrams(result.deck.slides.map((slide) => slide.html), refreshVersion);
+    }
     const paths = new Set(collectWatchPaths(result.deck));
     for (const extra of this.extraWatchPathsFromRaw(raw)) {
       paths.add(extra);

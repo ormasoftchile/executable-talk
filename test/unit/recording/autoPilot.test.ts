@@ -1,11 +1,69 @@
 import { expect } from 'chai';
 import { parseDeck } from '../../../packages/core/src/parser/deckParser';
+import { mapSidecarActionsToInteractiveElements } from '../../../packages/core/src/parser/sidecarActionMapper';
 import {
   buildAutoPilotPlan,
   NarrationTiming,
 } from '../../../packages/extension/src/recording/autoPilot';
 
 describe('AutoPilot narration timing', () => {
+  it('uses rendered reveal counts and sidecar button positions for editor demos', async () => {
+    const result = await parseDeck('# Demo\n\nPreview', 'preview.deck.md');
+    const slide = result.deck!.slides[0];
+    slide.interactiveElements = mapSidecarActionsToInteractiveElements([{
+      type: 'sequence', autoRecord: { viewMs: 8000, returnToDeck: true },
+      steps: [{ type: 'vscode.command', id: 'deckPilot.openPreview' }],
+    }], 0);
+    const actionId = slide.interactiveElements[0].action.id;
+    const plan = buildAutoPilotPlan([slide], {}, [], new Map(), [
+      { fragmentCount: 4, actionFragments: { [actionId]: 4 } },
+    ]);
+    const trigger = plan.findIndex(step => step.type === 'trigger-action');
+    expect(plan.slice(0, trigger).filter(step => step.type === 'advance').map(step => step.fragmentIndex))
+      .to.deep.equal([1, 2, 3, 4]);
+    expect(plan[trigger]).to.include({ actionId, fragmentIndex: 4, restoreEditors: true });
+  });
+
+  it('holds an opted-in editor demo then restores the deck before advancing', async () => {
+    const result = await parseDeck('# Demo\n\nPreview\n\n# Continue\n\nSlides', 'preview.deck.md');
+    const slide = result.deck!.slides[0];
+    slide.fragmentCount = 0;
+    slide.interactiveElements = mapSidecarActionsToInteractiveElements([{
+      type: 'sequence',
+      label: 'Show preview',
+      autoRecord: { viewMs: 8000, returnToDeck: true },
+      steps: [{ type: 'vscode.command', id: 'deckPilot.openPreview' }],
+    }], 0);
+    const plan = buildAutoPilotPlan(result.deck!.slides);
+    const trigger = plan.findIndex(step => step.type === 'trigger-action');
+    expect(plan[trigger]).to.include({ restoreEditors: true });
+    expect(plan[trigger + 1]).to.include({ type: 'restore-editors', durationMs: 8000 });
+    expect(plan[trigger + 2]).to.include({ type: 'advance', slideIndex: 1 });
+  });
+
+  it('does not shorten narration to fit the editor demo hold', async () => {
+    const result = await parseDeck('# Demo\n\n<!-- voice[1]: Explain the live preview. -->', 'preview.deck.md');
+    const slide = result.deck!.slides[0];
+    slide.fragmentCount = 0;
+    slide.interactiveElements = mapSidecarActionsToInteractiveElements([{
+      type: 'sequence', autoRecord: { viewMs: 8000, returnToDeck: true },
+      steps: [{ type: 'vscode.command', id: 'deckPilot.openPreview' }],
+    }], 0);
+    const plan = buildAutoPilotPlan([slide], {}, [
+      { cueIndex: 1, text: 'Explain the live preview.', durationMs: 12000 },
+    ]);
+    expect(plan.find(step => step.type === 'restore-editors')?.durationMs).to.equal(12400);
+  });
+
+  it('leaves ordinary sequences on the existing wait-only path', async () => {
+    const result = await parseDeck('# Demo', 'preview.deck.md');
+    result.deck!.slides[0].interactiveElements = mapSidecarActionsToInteractiveElements([{
+      type: 'sequence', steps: [{ type: 'vscode.command', id: 'deckPilot.openPreview' }],
+    }], 0);
+    const plan = buildAutoPilotPlan(result.deck!.slides);
+    expect(plan.some(step => step.type === 'restore-editors')).to.equal(false);
+  });
+
   it('schedules every cue on static slides before advancing to fragmented slides', async () => {
     const result = await parseDeck('# Static slide\n\nText\n\n# Fragmented slide\n\nText', 'static-cues.deck.md');
     const slides = result.deck!.slides;

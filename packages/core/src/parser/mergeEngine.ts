@@ -142,6 +142,10 @@ export function mergeSidecarDeckMetadata(metadata: DeckMetadata, sidecar: Sideca
       merged.theme = sidecar.deck.theme;
     }
 
+    if (sidecar.deck.basePath !== undefined && merged.basePath === undefined) {
+      merged.basePath = sidecar.deck.basePath;
+    }
+
     if (sidecar.deck.listFragmentMode !== undefined && merged.listFragmentMode === undefined) {
       merged.listFragmentMode = sidecar.deck.listFragmentMode;
     }
