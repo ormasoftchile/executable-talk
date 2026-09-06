@@ -2,7 +2,7 @@
   "name": "deckpilot-triton",
   "displayName": "Deckpilot Triton Diagrams",
   "description": "Triton diagram renderer for Deckpilot. Renders diagram:mermaid fences using the Triton compiler.",
-  "version": "0.13.20",
+  "version": "0.13.21",
   "private": true,
   "publisher": "focus-space",
   "license": "MIT",
