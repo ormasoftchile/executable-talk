@@ -133,11 +133,9 @@ async function parseMarkdownDeck(
       slides = mergeSidecarIntoSlides(slides, loadedSidecar);
     }
 
-    // Parse authored scenes from frontmatter (T043)
-    const { scenes, errors: sceneErrors } = parseAuthoredScenes(
-      mergedMetadata.scenes,
-      slides.length
-    );
+    const { scenes, errors: sceneErrors } = mergedMetadata.scenes !== undefined
+      ? parseAuthoredScenes(mergedMetadata.scenes, slides.length)
+      : resolveManifestScenes(loadedSidecar?.scenes, slides);
 
     // Update metadata with parsed scenes
     const enrichedMetadata = { ...mergedMetadata, scenes } as DeckMetadata;

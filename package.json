@@ -177,6 +177,18 @@
     "configuration": {
       "title": "Deckpilot",
       "properties": {
+        "deckPilot.appearance.style": {
+          "type": "string", "default": "default", "enum": ["default"], "scope": "resource",
+          "description": "Default visual family for decks without an authored appearance."
+        },
+        "deckPilot.appearance.mode": {
+          "type": "string", "default": "auto", "enum": ["auto", "light", "dark"], "scope": "resource",
+          "description": "Default deck color mode. Auto follows this VS Code window."
+        },
+        "deckPilot.appearance.contrast": {
+          "type": "string", "default": "auto", "enum": ["auto", "normal", "high"], "scope": "resource",
+          "description": "Default deck contrast. Auto honors the editor's accessibility theme."
+        },
         "deckPilot.treatAllMarkdownAsDeck": {
           "type": "boolean",
           "default": true,

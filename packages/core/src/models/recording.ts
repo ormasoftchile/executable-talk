@@ -57,6 +57,7 @@ export interface RecordingEvent {
  * Full recording session artifact produced on stop.
  */
 export interface RecordingSession {
+  appearance?: import('./appearance').ResolvedAppearance;
   /** Unique session identifier */
   sessionId: string;
   /** Absolute path to the .deck.md file */

@@ -64,6 +64,8 @@ import { alignRecordingSessionToCapture } from '../recording/videoCompositionPla
 import { disposeBrowserPanel } from '../browser';
 import { diagramLog } from '../utils/diagramLogger';
 import { DiagramService, annotateDiagramPlaceholders } from '../services/diagramService';
+import { AppearanceService } from '../services/appearanceService';
+import { appearanceCss, type ResolvedAppearance } from '@deckpilot/core/models/appearance';
 import type { VideoPlaybackMessage } from '../webview/messages';
 
 /**
@@ -147,6 +149,7 @@ export class Conductor implements vscode.Disposable {
   private recorderOrchestrator: RecorderOrchestrator | undefined;
   private recordingOutputDirectory: string | undefined;
   private autoPilotRunning = false;
+  private slideRenderVersion = 0;
   private pendingVideoNarrationCues = new Map<
     number,
     Array<{ cueIndex: number; offsetMs: number }>
@@ -159,12 +162,14 @@ export class Conductor implements vscode.Disposable {
   private videoPlaybackStatus = new Map<number, 'playing' | 'ended' | 'failed'>();
   private videoPlaybackWaiters = new Map<number, (error?: string) => void>();
 
+  private appearanceService = new AppearanceService();
+
   constructor(extensionUri: vscode.Uri) {
     this.stateStack = new StateStack();
     this.snapshotFactory = new SnapshotFactory();
     this.navigationHistory = new NavigationHistory();
     this.sceneStore = new SceneStore();
-    this.webviewProvider = new WebviewProvider(extensionUri);
+    this.webviewProvider = new WebviewProvider(extensionUri, this.appearanceService);
     this.presenterViewProvider = new PresenterViewProvider(extensionUri);
 
     this.outputChannel = vscode.window.createOutputChannel('Deckpilot');
@@ -179,6 +184,9 @@ export class Conductor implements vscode.Disposable {
     this.recordingState = new RecordingState();
     this.diagramRegistry = new DiagramRendererRegistry();
     this.diagramService = new DiagramService(this.diagramRegistry);
+    this.disposables.push(this.appearanceService, this.appearanceService.onDidChange((filePath, appearance) => {
+      if (this.deck?.filePath === filePath) void this.updateAppearance(appearance);
+    }));
 
     // Listen for workspace trust changes
     this.disposables.push(
@@ -190,6 +198,22 @@ export class Conductor implements vscode.Disposable {
 
   getDiagramRegistry(): DiagramRendererRegistry {
     return this.diagramRegistry;
+  }
+
+  getAppearanceService(): AppearanceService {
+    return this.appearanceService;
+  }
+
+  private async updateAppearance(appearance: ResolvedAppearance, waitForPaint = false): Promise<void> {
+    if (!this.webviewProvider.isOpen()) return;
+    const deck = this.deck;
+    const index = this.currentSlideIndex;
+    const slide = deck?.slides[index];
+    if (!deck || !slide) return;
+    const html = annotateDiagramPlaceholders(slide.html, this.resolvedBasePath(), deck.metadata.diagrams?.theme);
+    const blocks = await this.diagramService.resolveSlideBlocks(html, appearance, deck.metadata.diagrams);
+    if (this.deck !== deck || this.currentSlideIndex !== index || this.appearanceService.get(deck).revision !== appearance.revision) return;
+    await this.webviewProvider.sendAppearance(appearance, blocks, index, waitForPaint);
   }
 
   /**
@@ -205,6 +229,7 @@ export class Conductor implements vscode.Disposable {
     this.deck = deck;
     this.deck.state = 'loading';
     this.currentSlideIndex = 0;
+    this.appearanceService.configure(deck);
 
     // Resolve environment variables (Feature 006 — T016)
     await this.resolveEnvironment(deck);
@@ -319,6 +344,9 @@ export class Conductor implements vscode.Disposable {
     if (!this.deck) {
       return;
     }
+    const deck = this.deck;
+    const renderVersion = ++this.slideRenderVersion;
+    const isCurrent = () => this.deck === deck && deck.state !== 'closed' && renderVersion === this.slideRenderVersion;
 
     // Bounds check
     const targetIndex = Math.max(0, Math.min(index, this.deck.slides.length - 1));
@@ -365,10 +393,32 @@ export class Conductor implements vscode.Disposable {
       this.resolvedBasePath(),
       this.deck.metadata.diagrams?.theme,
     );
+    const directives = slide.renderDirectives?.length ? parseRenderDirectives(slide.content, slide.index) : [];
+    const contentBlocks = await Promise.all(directives.filter(directive => directive.type !== 'command').map(async directive => {
+      try {
+        const block = await resolveDirective(directive, this.resolvedBasePath());
+        return { blockId: directive.id, html: block.html };
+      } catch {
+        return { blockId: directive.id, html: '<div class="render-block render-block-error">Content could not be loaded.</div>' };
+      }
+    }));
+    if (!isCurrent()) return;
+    let appearance = this.appearanceService.get(deck);
+    let diagramBlocks: Array<{ blockId: string; html: string }> = [];
+    if (slide.diagramBlocks?.length) {
+      do {
+        appearance = this.appearanceService.get(deck);
+        diagramBlocks = await this.diagramService.resolveSlideBlocks(resolvedHtml, appearance, deck.metadata.diagrams);
+        if (!isCurrent()) return;
+      } while (this.appearanceService.get(deck).revision !== appearance.revision);
+    }
 
     // Send slide changed to webview
     this.webviewProvider.sendSlideChanged({
       slideIndex: targetIndex,
+      appearance,
+      appearanceCss: appearanceCss(appearance),
+      diagramBlocks: [...contentBlocks, ...diagramBlocks],
       totalSlides: this.deck.slides.length,
       slideHtml: resolvedHtml,
       canUndo: this.stateStack.canUndo(),
@@ -379,12 +429,8 @@ export class Conductor implements vscode.Disposable {
       canGoBack: this.navigationHistory.canGoBack(),
       totalHistoryEntries: this.navigationHistory.length,
     });
-
-    // Resolve diagram blocks asynchronously (non-blocking)
-    diagramLog(`[conductor] goToSlide: slide.diagramBlocks = ${slide.diagramBlocks?.length ?? 0}`);
-    if (slide.diagramBlocks && slide.diagramBlocks.length > 0) {
-      void this.resolveSlideAsyncDiagrams(resolvedHtml);
-    }
+    const commands = directives.filter(directive => directive.type === 'command');
+    if (commands.length) void this.resolveDirectivesAsync(commands);
 
     // Sync presenter view if visible
     this.presenterViewProvider.updateSlide(targetIndex);
@@ -793,9 +839,13 @@ export class Conductor implements vscode.Disposable {
     outputDirectory?: string,
     windowTarget?: RecorderWindowTarget,
   ): Promise<void> {
-    if (!this.deck) {
+    if (!this.deck || this.recordingState.isRecording()) {
       return;
     }
+    const recordingDeck = this.deck;
+    const appearance = this.appearanceService.freeze(recordingDeck);
+    try {
+    await this.updateAppearance(appearance, true);
     const recordingWindowTarget = windowTarget ?? await captureActiveRecordingWindow();
 
     const sessionId = randomUUID();
@@ -836,9 +886,14 @@ export class Conductor implements vscode.Disposable {
       this.deck.title,
       this.currentSlideIndex,
       sessionId,
+      { ...appearance, rendererVersions: this.diagramRegistry.getVersions() },
     );
 
     this.outputChannel.appendLine('[Recording] Session started');
+    } catch (error) {
+      this.appearanceService.release(recordingDeck);
+      throw error;
+    }
   }
 
   /**
@@ -849,6 +904,8 @@ export class Conductor implements vscode.Disposable {
   async stopRecording(): Promise<RecordingSession | undefined> {
     const activeSession = this.recordingState.getSession();
     if (!activeSession) return undefined;
+    const recordingDeck = this.deck;
+    try {
 
     const session = this.recordingState.stopRecording(this.currentSlideIndex);
     if (this.recorderOrchestrator) {
@@ -926,6 +983,9 @@ export class Conductor implements vscode.Disposable {
       this.recordingOutputDirectory = undefined;
     }
     return session;
+    } finally {
+      if (recordingDeck) this.appearanceService.release(recordingDeck);
+    }
   }
 
   /**
@@ -2355,27 +2415,7 @@ export class Conductor implements vscode.Disposable {
       }
     }
 
-    // Schedule async resolution of directives (don't await - let the slide show immediately)
-    void this.resolveDirectivesAsync(directives);
-
     return this.interpolatePreviewHtml(injectBlockElements(html, slide));
-  }
-
-  /**
-   * Resolve diagram blocks asynchronously and send renderBlockUpdate to webview.
-   * Mirrors resolveDirectivesAsync but dispatches through DiagramRendererRegistry.
-   */
-  private async resolveSlideAsyncDiagrams(slideHtml: string): Promise<void> {
-    const updates = await this.diagramService.resolveSlideBlocks(slideHtml);
-    diagramLog(`[conductor] resolveSlideAsyncDiagrams: blocks = ${updates.length}`);
-
-    for (const update of updates) {
-      this.webviewProvider.sendRenderBlockUpdate({
-        blockId: update.blockId,
-        html: update.html,
-        status: update.html.includes('diagram-block--error') ? 'error' : 'success',
-      });
-    }
   }
 
   /**

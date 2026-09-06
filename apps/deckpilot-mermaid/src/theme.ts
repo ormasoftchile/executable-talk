@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-export type MermaidTheme = 'default' | 'dark' | 'neutral';
+export type MermaidTheme = 'default' | 'dark' | 'neutral' | 'base';
 
 export interface MermaidThemeConfig {
   theme: MermaidTheme;

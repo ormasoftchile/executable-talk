@@ -25,6 +25,8 @@ import type { DiagramFenceInfo, DiagramRenderOptions, DiagramRenderResult } from
  * The renderer must never throw — surface errors via DiagramRenderResult.ok=false.
  */
 export interface IDiagramRenderer {
+  readonly appearanceProtocol?: 1;
+  readonly version?: string;
   /** Unique identifier for this renderer, e.g. "triton", "graphviz". */
   readonly id: string;
   /** Fence language tags this renderer handles, e.g. ["mermaid", "poster"]. */

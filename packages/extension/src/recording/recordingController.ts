@@ -39,6 +39,7 @@ export class RecordingController {
   private deckTitle: string | undefined;
   private manualMarkers: ManualMarker[] = [];
   private ignoredIntervals: IgnoredInterval[] = [];
+  private appearance: RecordingSession['appearance'];
 
   constructor() {
     this.timeline = new RecordingTimeline();
@@ -56,12 +57,14 @@ export class RecordingController {
     deckTitle?: string,
     slideIndex = 0,
     sessionId: string = randomUUID(),
+    appearance?: RecordingSession['appearance'],
   ): void {
     if (this.recording) {
       return; // already recording
     }
 
     this.sessionId = sessionId;
+    this.appearance = appearance ? JSON.parse(JSON.stringify(appearance)) as RecordingSession['appearance'] : undefined;
     this.deckPath = deckPath;
     this.deckTitle = deckTitle;
     this.startTime = Date.now();
@@ -246,6 +249,7 @@ export class RecordingController {
 
     return {
       sessionId: this.sessionId,
+      ...(this.appearance ? { appearance: this.appearance } : {}),
       deckPath: this.deckPath,
       deckTitle: this.deckTitle,
       recordingStartTime: this.startTime,

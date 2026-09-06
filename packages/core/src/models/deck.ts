@@ -6,6 +6,7 @@
 import { Slide } from './slide';
 import { EnvDeclaration } from './env';
 import { DeckItem } from './deckItem';
+import type { AppearancePreferences } from './appearance';
 
 /**
  * Pre-authored scene anchor defined in deck YAML frontmatter.
@@ -48,6 +49,9 @@ export type ToolbarButton = 'sidebar' | 'panel' | 'terminal' | 'activityBar' | '
  * options (e.g. maxWidth, background) without adding more top-level fields.
  */
 export interface DiagramDeckOptions {
+  style?: string;
+  mode?: 'inherit' | 'light' | 'dark';
+  surface?: 'auto' | 'opaque' | 'transparent';
   /**
    * Default theme for diagram blocks (e.g. a Triton preset like "executive").
    * A per-fence `{theme: …}` attribute always wins over this default.
@@ -82,6 +86,7 @@ export interface PresentationOptions {
  * Deck-level metadata from frontmatter
  */
 export interface DeckMetadata {
+  appearance?: AppearancePreferences;
   /** Presentation title */
   title?: string;
   /** Author name */

@@ -18,7 +18,8 @@
  */
 
 import { build } from 'esbuild';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,6 +71,7 @@ if (!source) {
 
 const dest = resolve(__dirname, '..', 'dist', 'vendor', 'triton');
 const entryPoint = resolve(source, 'index.js');
+const runtimeRevision = createHash('sha256').update(await readFile(entryPoint)).digest('hex');
 
 const resvgShimPlugin = {
   name: 'resvg-shim',
@@ -99,7 +101,12 @@ await mkdir(dest, { recursive: true });
 await build({
   stdin: {
     contents: `
-      import { compileSync, renderSync, compileAndRenderSync, embedRevealManifest } from ${JSON.stringify(entryPoint)};
+      import * as runtime from ${JSON.stringify(entryPoint)};
+      import { createHash } from 'node:crypto';
+      const { compileSync, renderSync, compileAndRenderSync, embedRevealManifest } = runtime;
+      const runtimeRevision = ${JSON.stringify(runtimeRevision)};
+      const appearanceManifestHash = runtime.defaultAppearanceManifest
+        ? createHash('sha256').update(JSON.stringify(runtime.defaultAppearanceManifest)).digest('hex') : undefined;
 
       const THEME_ALIASES = {
         dark: 'midnight',
@@ -148,6 +155,31 @@ await build({
       }
 
       function renderMermaid(text, options = {}) {
+        if (options.appearance) {
+          if (!runtime.resolveThemeFamily || !runtime.renderSVG) {
+            const fallback = renderMermaid(text, { theme: options.appearance.mode === 'dark' ? 'showcase' : 'default' });
+            return { ...fallback, warnings: [...(fallback.warnings ?? []), 'Installed Triton uses a legacy palette on an opaque canvas; update the companion for adaptive appearance.'] };
+          }
+          const appearance = options.appearance;
+          const selected = runtime.resolveThemeFamily(resolveThemeName(options.style ?? 'default'), options.mode ?? appearance.mode, appearance.contrast);
+          const result = compileSync(text, selected.theme, selected.style);
+          if (!result.ok) return { warnings: [result.error.message] };
+          const compatible = selected.theme.palette.background.toLowerCase() === appearance.palette.background.toLowerCase()
+            && selected.mode === appearance.mode && selected.contrast === appearance.contrast;
+          const backgroundPainted = options.surface === 'opaque' || !compatible;
+          const warnings = [...selected.warnings];
+          if (options.surface === 'transparent' && !compatible) warnings.push('Incompatible transparent diagram; preserving an opaque canvas for readability.');
+          if (appearanceManifestHash !== appearance.manifestHash) warnings.push('Host and Triton appearance manifests differ; rebuild matching versions.');
+          let svg = runtime.renderSVG(result.value.scene, {
+            background: backgroundPainted ? 'opaque' : 'transparent',
+            fonts: options.fontRevision === runtime.defaultAppearanceManifest.font.revision ? 'external' : 'embedded',
+          });
+          if (result.value.reveal) svg = embedRevealManifest(svg, result.value.reveal);
+          return { svg, warnings, kind: 'known', reveal: result.value.reveal, appearance: {
+            style: selected.style, mode: selected.mode, contrast: selected.contrast,
+            canvas: selected.theme.palette.background, backgroundPainted, hash: appearance.hash,
+          } };
+        }
         const themedText = injectTheme(text, options.theme ?? 'midnight');
         // Interactive render path: also surfaces a progressive-reveal track when
         // the diagram opts into one (e.g. the deck/bullets family). The reveal
@@ -165,7 +197,7 @@ await build({
         return { svg, warnings: [], kind: 'known', reveal };
       }
 
-      export { compileSync, renderSync, compileAndRenderSync, detectDiagramType, renderMermaid };
+      export { compileSync, renderSync, compileAndRenderSync, detectDiagramType, renderMermaid, appearanceManifestHash, runtimeRevision };
     `,
     resolveDir: resolve(__dirname, '..'),
     sourcefile: 'vendor-triton-entry.mjs',

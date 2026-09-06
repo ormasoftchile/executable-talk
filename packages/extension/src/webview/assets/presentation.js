@@ -35,7 +35,7 @@
   /**
    * Initialize the presentation
    */
-  function init() {
+  async function init() {
     // Load deck data injected by extension
     if (window.deckData) {
       slides = window.deckData.slides || [];
@@ -76,11 +76,15 @@
       });
     }
 
+    if (document.fonts && document.body.classList.contains('adaptive-appearance')) {
+      await Promise.allSettled([
+        document.fonts.load('400 15px "Source Sans 3"'),
+        document.fonts.load('700 15px "Source Sans 3"'),
+      ]);
+    }
+
     // Notify extension we're ready
     sendMessage({ type: 'ready' });
-
-    // Show first slide
-    showSlide(0);
   }
 
   /**
@@ -269,10 +273,17 @@
    * Set up message listener for host messages
    */
   function setupMessageListener() {
+    const appearanceMenu = document.getElementById('appearance-menu');
+    if (appearanceMenu) appearanceMenu.addEventListener('click', function () {
+      vscode.postMessage({ type: 'vscodeCommand', payload: { commandId: 'deckPilot.chooseAppearance', args: [window.deckData?.deckPath] } });
+    });
     window.addEventListener('message', function (event) {
       const message = event.data;
       
       switch (message.type) {
+        case 'appearanceChanged':
+          handleAppearanceChanged(message.payload);
+          break;
         case 'slideChanged':
           handleSlideChanged(message);
           break;
@@ -527,6 +538,42 @@
     return index;
   }
 
+  let appearanceRevision = 0;
+  function handleAppearanceChanged(payload) {
+    if (!payload || payload.appearance.revision < appearanceRevision) return;
+    if (payload.slideIndex !== undefined && payload.slideIndex !== currentSlide) return;
+    appearanceRevision = payload.appearance.revision;
+    const scroll = slideContent.scrollTop;
+    const previous = currentFragment;
+    for (const update of payload.blocks) {
+      const current = slideContent.querySelector('[data-render-id="' + update.blockId + '"]');
+      if (current) current.outerHTML = update.html;
+    }
+    document.body.style.cssText = payload.css;
+    document.body.classList.add('adaptive-appearance');
+    document.body.classList.toggle('theme-light', payload.appearance.mode === 'light');
+    document.body.classList.toggle('theme-dark', payload.appearance.mode === 'dark');
+    document.body.dataset.appearanceMode = payload.appearance.mode;
+    expandTritonRevealFragments(slideContent);
+    totalFragments = renumberFragments();
+    for (const fragment of slideContent.querySelectorAll('.fragment')) {
+      fragment.classList.toggle('visible', Number(fragment.dataset.fragment) <= previous);
+    }
+    currentFragment = Math.min(previous, totalFragments);
+    slideContent.scrollTop = scroll;
+    const menu = document.getElementById('appearance-menu');
+    if (menu) menu.textContent = 'Appearance: ' + payload.appearance.mode;
+    updateNavigationButtons();
+    renderMermaidFallbacks(slideContent);
+    if (payload.requestId !== undefined) {
+      document.fonts.ready.then(function () {
+        requestAnimationFrame(function () { requestAnimationFrame(function () {
+          vscode.postMessage({ type: 'appearanceApplied', requestId: payload.requestId });
+        }); });
+      });
+    }
+  }
+
   /**
    * Triton diagrams that opt into progressive reveal embed an inert manifest
    * (`<script type="application/json" id="triton-reveal">`) alongside stable
@@ -717,19 +764,30 @@
    */
   function handleSlideChanged(message) {
     const payload = message.payload || message;
+    const staged = document.createElement('div');
+    staged.innerHTML = payload.slideHtml || payload.slideContent || slides[payload.slideIndex]?.content || '';
+    for (const update of payload.diagramBlocks || []) {
+      const block = staged.querySelector('[data-render-id="' + update.blockId + '"]');
+      if (block) {
+        const template = document.createElement('div');
+        template.innerHTML = update.html;
+        if (template.firstElementChild) preserveRenderBlockState(block, template.firstElementChild, update.blockId);
+      }
+    }
+    if (payload.appearance) {
+      appearanceRevision = payload.appearance.revision || 0;
+      document.body.style.cssText = payload.appearanceCss || '';
+      document.body.classList.add('adaptive-appearance');
+      document.body.classList.toggle('theme-light', payload.appearance.mode === 'light');
+      document.body.classList.toggle('theme-dark', payload.appearance.mode === 'dark');
+      document.body.dataset.appearanceMode = payload.appearance.mode;
+    }
     currentSlide = payload.slideIndex;
     totalSlides = payload.totalSlides || totalSlides;
     
     console.log('[handleSlideChanged] Received slide', currentSlide);
     
-    if (payload.slideHtml) {
-      slideContent.innerHTML = payload.slideHtml;
-      console.log('[handleSlideChanged] Set slideHtml. Contains fragment?', payload.slideHtml.includes('class="fragment"'));
-    } else if (payload.slideContent) {
-      slideContent.innerHTML = payload.slideContent;
-    } else if (slides[currentSlide]) {
-      slideContent.innerHTML = slides[currentSlide].content || '';
-    }
+    slideContent.replaceChildren(...staged.childNodes);
     
     // Update fragment state
     updateFragmentState();
@@ -753,9 +811,16 @@
     updateBreadcrumbTrail(payload.navigationHistory, payload.canGoBack, payload.totalHistoryEntries);
 
     setupVideoPlayback();
+    startLoadingTimers();
+    renderMermaidFallbacks(slideContent);
 
     // Notify extension that slide rendering is complete
-    vscode.postMessage({ type: 'slideRendered', payload: { slideIndex: currentSlide } });
+    const renderedSlide = currentSlide;
+    requestAnimationFrame(function () {
+      if (renderedSlide === currentSlide) {
+        vscode.postMessage({ type: 'slideRendered', payload: { slideIndex: renderedSlide } });
+      }
+    });
   }
 
   function setupVideoPlayback() {
@@ -809,7 +874,8 @@
     const payload = message.payload || message;
     totalSlides = payload.totalSlides;
     slides = payload.slides || slides;
-    showSlide(0);
+    updateSlideIndicator();
+    updateNavigationButtons();
 
     // Initialize env badge if envStatus is present in deckLoaded payload
     if (payload.envStatus) {
@@ -1206,6 +1272,7 @@
         securityLevel: 'strict',
         suppressErrorRendering: true,
         theme: theme,
+        ...(container.dataset.mermaidConfig ? JSON.parse(container.dataset.mermaidConfig) : {}),
       });
 
       var renderId = 'deckpilot-mermaid-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);

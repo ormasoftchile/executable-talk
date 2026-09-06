@@ -42,6 +42,7 @@ export type SidecarCue = string | SidecarTimedCue;
 export type SidecarItem = SidecarSlide;
 
 export interface SidecarDeck {
+  appearance?: import('./appearance').AppearancePreferences;
   title?: string;
   theme?: string;
   /** Base path for resolving relative file references in the deck (mirrors DeckMetadata.basePath) */
@@ -56,20 +57,22 @@ export interface SidecarDeck {
 
 /** Deck-wide diagram defaults in a sidecar (mirrors DiagramDeckOptions). */
 export interface SidecarDiagrams {
+  style?: string;
+  mode?: 'inherit' | 'light' | 'dark';
+  surface?: 'auto' | 'opaque' | 'transparent';
   /** Default theme for diagram blocks; a per-fence `{theme: …}` wins over it. */
   theme?: string;
 }
 
 /**
- * A named checkpoint that anchors to a slide by its explicit ID string.
- * Sidecar-variant of DeckMetadata's SceneDefinition (which uses a 1-based slide index).
- * The merge engine resolves the ID to a slide index at load time.
+ * A named checkpoint that targets a derived/explicit slide ID or 1-based number.
+ * The parser resolves the target to a zero-based slide index after parsing slides.
  */
 export interface SidecarScene {
   /** Human-readable scene name (unique within deck) */
   name: string;
-  /** Slide ID this scene anchors to (must match a <!-- id: slug --> in the markdown) */
-  slide: string;
+  /** Title-derived or explicit slide ID, or a one-based slide number. */
+  slide: string | number;
 }
 
 export interface SidecarRecording {

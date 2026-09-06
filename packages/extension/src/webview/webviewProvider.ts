@@ -41,6 +41,8 @@ import { Deck } from '@deckpilot/core/models/deck';
 import { ActionType } from '@deckpilot/core/models/action';
 import { injectBlockElements } from '@deckpilot/core/renderer/blockElementRenderer';
 import { SequenceErrorDetail } from '../actions/errors';
+import { appearanceCss, type ResolvedAppearance } from '@deckpilot/core/models/appearance';
+import type { AppearanceService } from '../services/appearanceService';
 
 /**
  * Callback interface for webview events
@@ -74,8 +76,26 @@ export class WebviewProvider implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
   private callbacks: WebviewCallbacks | undefined;
   private currentDeck: Deck | undefined;
+  private appearanceRequest = 0;
+  private appearanceAcks = new Map<number, () => void>();
 
-  constructor(private readonly extensionUri: vscode.Uri) {}
+  constructor(private readonly extensionUri: vscode.Uri, private readonly appearanceService?: AppearanceService) {}
+
+  async sendAppearance(appearance: ResolvedAppearance, blocks: Array<{ blockId: string; html: string }>, slideIndex?: number, waitForPaint = false): Promise<void> {
+    const requestId = ++this.appearanceRequest;
+    let painted = Promise.resolve();
+    if (waitForPaint && this.panel) {
+      painted = new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          this.appearanceAcks.delete(requestId);
+          reject(new Error('Timed out waiting for the recording appearance to paint.'));
+        }, 10000);
+        this.appearanceAcks.set(requestId, () => { clearTimeout(timer); resolve(); });
+      });
+    }
+    this.postMessage({ type: 'appearanceChanged', payload: { appearance, css: appearanceCss(appearance), blocks, slideIndex, requestId } });
+    await painted;
+  }
 
   /**
    * Create and show the presentation panel
@@ -151,6 +171,7 @@ export class WebviewProvider implements vscode.Disposable {
     const transformedPayload = {
       ...payload,
       slideHtml: this.transformImageUrls(payload.slideHtml),
+      diagramBlocks: payload.diagramBlocks?.map(block => ({ ...block, html: this.transformImageUrls(block.html) })),
     };
     this.postMessage({ type: 'slideChanged', payload: transformedPayload });
   }
@@ -343,6 +364,12 @@ export class WebviewProvider implements vscode.Disposable {
   }
 
   private handleMessage(message: unknown): void {
+    if (message && typeof message === 'object' && 'type' in message && message.type === 'appearanceApplied'
+      && 'requestId' in message && typeof message.requestId === 'number') {
+      this.appearanceAcks.get(message.requestId)?.();
+      this.appearanceAcks.delete(message.requestId);
+      return;
+    }
     if (!isWebviewMessage(message) || !this.callbacks) {
       return;
     }
@@ -497,6 +524,7 @@ export class WebviewProvider implements vscode.Disposable {
     // Serialize deck for webview
     const deckJson = JSON.stringify({
       title: this.currentDeck?.title,
+      deckPath: this.currentDeck?.filePath,
       slideCount: this.currentDeck?.slides.length ?? 0,
       slides: this.currentDeck?.slides.map((slide, index) => {
         return {
@@ -529,17 +557,23 @@ export class WebviewProvider implements vscode.Disposable {
     })();
     const fontSizeClass = `font-${(options.fontSize as string) || 'medium'}`;
     const modeClass = deckMode === 'onboarding' ? 'mode-onboarding' : 'mode-presentation';
+    const appearance = this.currentDeck && this.appearanceService?.get(this.currentDeck);
+    const appearanceStyle = appearance ? appearanceCss(appearance).replace(/"/g, '&quot;') : '';
+    const fontUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri,
+      'packages', 'extension', 'src', 'webview', 'assets', 'appearance-fonts.css'));
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; img-src ${webview.cspSource} https: data:; media-src ${webview.cspSource};">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; font-src ${webview.cspSource} data:; img-src ${webview.cspSource} https: data:; media-src ${webview.cspSource};">
   <link href="${cssUri}" rel="stylesheet">
+  <link href="${fontUri}" rel="stylesheet">
   <title>Presentation</title>
 </head>
-<body class="${themeClass} ${fontSizeClass} ${modeClass}">
+<body class="${themeClass} ${fontSizeClass} ${modeClass}${appearance ? ' adaptive-appearance' : ''}" style="${appearanceStyle}">
+  ${appearance ? '<button id="appearance-menu" title="Appearance" aria-label="Appearance">Appearance</button>' : ''}
   <div id="presentation-container">
     <div id="progress-bar" class="hidden"></div>
     <div id="slide-container">

@@ -57,6 +57,22 @@ const opts = {
 };
 
 describe('renderPreviewHtml', () => {
+  it('exposes the declared deck theme without using arbitrary values as CSS', () => {
+    for (const theme of ['light', 'dark', 'minimal', 'contrast'] as const) {
+      const deck = makeDeck([]);
+      deck.metadata.theme = theme;
+      expect(renderPreviewHtml(deck, opts)).to.include(`data-deck-theme="${theme}"`);
+    }
+    expect(renderPreviewHtml(makeDeck([]), opts)).to.include('data-deck-theme="auto"');
+  });
+
+  it('allows bundled font data without permitting remote font hosts', () => {
+    const html = renderPreviewHtml(makeDeck([]), opts);
+    expect(html).to.include('font-src vscode-resource: data:;');
+    expect(html).to.include("default-src 'none'");
+    expect(html).to.include("script-src 'nonce-abc123' https://cdn.jsdelivr.net;");
+  });
+
   it('renders deck title and slide count in the header', () => {
     const html = renderPreviewHtml(
       makeDeck([makeSlide(0, { content: '', html: '<p>Hi</p>' })]),

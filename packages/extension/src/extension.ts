@@ -353,6 +353,7 @@ export function activate(context: vscode.ExtensionContext): DeckpilotDiagramAPI 
 
     // Initialize conductor
     conductor = new Conductor(context.extensionUri);
+    context.subscriptions.push(vscode.commands.registerCommand('deckPilot.chooseAppearance', (filePath?: string) => conductor?.getAppearanceService().showMenu(typeof filePath === 'string' ? filePath : undefined)));
     context.subscriptions.push(conductor);
 
     // Keep menu `when`-clause context keys in sync with the active editor, so
@@ -498,7 +499,7 @@ export function activate(context: vscode.ExtensionContext): DeckpilotDiagramAPI 
                 return;
             }
             if (!previewProvider) {
-                previewProvider = new PreviewProvider(context.extensionUri, conductor!.getDiagramRegistry());
+                previewProvider = new PreviewProvider(context.extensionUri, conductor!.getDiagramRegistry(), conductor!.getAppearanceService());
                 context.subscriptions.push(previewProvider);
             }
             await previewProvider.show(deckUri);
