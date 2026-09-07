@@ -9,6 +9,8 @@ import * as vscode from 'vscode';
 import { renderPreviewHtml, renderPreviewError } from '../../../packages/extension/src/preview/previewRenderer';
 import type { Deck } from '../../../packages/core/src/models/deck';
 import type { Slide } from '../../../packages/core/src/models/slide';
+import { buildTimingSummary } from '../../../packages/extension/src/recording/durationBudget';
+const { JSDOM } = require('jsdom');
 
 function makeSlide(
   index: number,
@@ -57,8 +59,19 @@ const opts = {
 };
 
 describe('renderPreviewHtml', () => {
+  it('shows measured and estimated narration separately and flags an over-budget plan', () => {
+    const deck = makeDeck([makeSlide(0, { content: '', html: '<p>Demo</p>', cues: ['Recorded.', 'Pending.'] })]);
+    const timing = buildTimingSummary(deck.slides, {}, [{ cueIndex: 1, text: 'Recorded.', durationMs: 4000 }], 5000);
+    const html = renderPreviewHtml(deck, { ...opts, timing });
+    expect(html).to.include('Measured narration 0:04');
+    expect(html).to.include('Estimated narration');
+    expect(html).to.include('1/2 takes measured');
+    expect(html).to.include('Shorten');
+    expect(html).to.include('Final video not verified');
+    expect(html).not.to.include('Ready to submit');
+  });
+
   it('renders preloaded diagrams at startup without waiting for network scripts', () => {
-    const { JSDOM } = require('jsdom');
     const deck = makeDeck([makeSlide(0, { content: '', html: '<figure data-render-id="diagram-0-0" class="diagram-block--loading"></figure>' })]);
     const html = renderPreviewHtml(deck, { ...opts, initialBlocks: [{
       blockId: 'diagram-0-0', html: '<figure><svg><text>Ready preview</text></svg></figure>',

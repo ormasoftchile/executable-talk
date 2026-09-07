@@ -1,3 +1,4 @@
+import { parseMaxDuration, verifyFinalVideoDuration } from './recording/durationBudget';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -739,6 +740,7 @@ export function activate(context: vscode.ExtensionContext): DeckpilotDiagramAPI 
                     throw new Error('The active presentation has no loaded deck.');
                 }
                 const { project, timings } = prepared;
+                const maxDurationMs = parseMaxDuration(conductor.getDeck()?.metadata.recording?.maxDuration);
 
                 void vscode.window.showInformationMessage('Auto-pilot started using measured narration timing.');
                 const session = await conductor.autoRecord(timings, setup.outputDirectory, windowTarget);
@@ -800,15 +802,18 @@ export function activate(context: vscode.ExtensionContext): DeckpilotDiagramAPI 
                     },
                 );
 
+                const durationReport = maxDurationMs === undefined ? undefined
+                    : await verifyFinalVideoDuration(dubbedVideo, maxDurationMs);
                 const allFiles = [
                     ...sessionFiles,
                     ...scriptFiles,
                     captionFile,
                     sessionProject.projectPath,
                     dubbedVideo,
+                    ...(durationReport ? [durationReport] : []),
                 ];
                 await showRecordingComplete(
-                    `Auto-record complete: ${allFiles.length} files exported`,
+                    durationReport ? `Auto-record complete: final video verified within ${maxDurationMs! / 1000}s` : `Auto-record complete: ${allFiles.length} files exported`,
                     allFiles,
                     captionFile,
                     path.dirname(session.deckPath),

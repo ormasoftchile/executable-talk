@@ -54,6 +54,7 @@ import {
   resolveAutoPilotConfig,
 } from '../recording/autoPilot';
 import { resolveRecordingOutputLayout } from '../recording/outputLayout';
+import { buildTimingSummary, parseMaxDuration, requirePlanWithinBudget } from '../recording/durationBudget';
 import {
   composeRecordedVideo,
   probeRecordedMediaDuration,
@@ -1090,6 +1091,12 @@ export class Conductor implements vscode.Disposable {
     const renderedLayouts = await this.webviewProvider.prepareRecordingLayout(layoutSlides);
 
     // Build the plan from slides
+    const maxDurationMs = parseMaxDuration(this.deck.metadata.recording?.maxDuration);
+    if (maxDurationMs !== undefined) {
+      const summary = buildTimingSummary(this.deck.slides, this.autoPilotConfig, narrationTimings, maxDurationMs, videoDurations, renderedLayouts);
+      this.outputChannel.appendLine(`[AutoPilot] Duration estimate: ${summary.plannedMs}ms; limit: ${maxDurationMs}ms. Final video verification required.`);
+      requirePlanWithinBudget(summary);
+    }
     const plan = buildAutoPilotPlan(
       this.deck.slides,
       this.autoPilotConfig,

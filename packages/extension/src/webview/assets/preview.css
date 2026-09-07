@@ -47,7 +47,23 @@ html, body {
   display: flex;
   align-items: center;
   gap: 0.8rem;
+  flex-wrap: wrap;
 }
+
+.preview-header { flex-wrap: wrap; }
+.preview-title { overflow-wrap: anywhere; }
+.preview-timing {
+  padding: 0.65rem 1.2rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-descriptionForeground);
+  overflow-wrap: anywhere;
+}
+.preview-timing > div { display: flex; flex-wrap: wrap; gap: 0.2rem 1rem; }
+.preview-timing strong { color: var(--vscode-foreground); }
+.preview-timing--over { border-left: 3px solid var(--vscode-errorForeground); }
+.preview-timing--over > div:first-child strong:last-child { color: var(--vscode-errorForeground); }
 
 .preview-notes-toggle {
   font: inherit;

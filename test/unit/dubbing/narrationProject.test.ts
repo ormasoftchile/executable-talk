@@ -7,6 +7,7 @@ import {
   createNarrationProject,
   loadDeckNarrationSetup,
   loadNarrationTimings,
+  loadAvailableNarrationTimings,
   seedNarrationProject,
   stageNarrationProjectForSession,
 } from '../../../packages/extension/src/dubbing/narrationProject';
@@ -37,6 +38,33 @@ describe('narration project handoff', () => {
     expect(srt).to.include('2\n');
     expect(srt).to.include('Fragment narration.');
     expect(project.hadExistingProject).to.equal(false);
+  });
+
+  it('loads partial measured takes by text, not stale position, without rewriting the project', async () => {
+    const projectPath = path.join(root, 'narration-project.json');
+    const take = path.join(root, 'take.wav');
+    const raw = path.join(root, 'raw.wav');
+    await fs.promises.writeFile(raw, 'raw');
+    await fs.promises.writeFile(take, 'processed');
+    const entries = JSON.stringify([{ index: 9, text: cues[1].text, raw_take_path: raw,
+      processed_take_path: take, processed_duration_ms: 3800 }]);
+    await fs.promises.writeFile(projectPath, entries);
+    expect(await loadAvailableNarrationTimings(projectPath, cues)).to.deep.equal([
+      { cueIndex: 2, text: cues[1].text, durationMs: 3800 },
+    ]);
+    expect(await fs.promises.readFile(projectPath, 'utf8')).to.equal(entries);
+    await fs.promises.utimes(raw, new Date(), new Date(Date.now() + 10000));
+    expect(await loadAvailableNarrationTimings(projectPath, cues)).to.deep.equal([]);
+    expect(await loadAvailableNarrationTimings(path.join(root, 'missing.json'), cues)).to.deep.equal([]);
+  });
+
+  it('does not call changed or missing audio measured', async () => {
+    const projectPath = path.join(root, 'narration-project.json');
+    await fs.promises.writeFile(projectPath, JSON.stringify([
+      { index: 1, text: 'Previous wording.', processed_duration_ms: 1000, processed_take_path: 'old.wav' },
+      { index: 2, text: cues[1].text, processed_duration_ms: 2000, processed_take_path: 'missing.wav' },
+    ]));
+    expect(await loadAvailableNarrationTimings(projectPath, cues)).to.deep.equal([]);
   });
 
   it('refreshes cues without replacing an existing narration project', async () => {

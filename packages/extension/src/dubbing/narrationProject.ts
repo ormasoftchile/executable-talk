@@ -21,6 +21,7 @@ export interface DeckNarrationSetup {
 interface NarrationProjectEntry {
   index: number;
   text: string;
+  raw_take_path?: string;
   processed_take_path?: string;
   processed_duration_ms?: number;
 }
@@ -109,6 +110,45 @@ export async function stageNarrationProjectForSession(
     fs.promises.copyFile(project.projectPath, projectPath),
   ]);
   return { srtPath, projectPath, hadExistingProject: true };
+}
+
+export async function loadAvailableNarrationTimings(
+  projectPath: string, cues: readonly VoiceOverCue[],
+): Promise<NarrationTiming[]> {
+  let entries: NarrationProjectEntry[];
+  try {
+    const parsed: unknown = JSON.parse(await fs.promises.readFile(projectPath, 'utf8'));
+    if (!Array.isArray(parsed)) return [];
+    entries = parsed.filter((entry: unknown): entry is NarrationProjectEntry => {
+      if (!entry || typeof entry !== 'object') return false;
+      const item = entry as NarrationProjectEntry;
+      return typeof item.text === 'string' && typeof item.processed_take_path === 'string' &&
+        typeof item.processed_duration_ms === 'number' && Number.isFinite(item.processed_duration_ms) && item.processed_duration_ms > 0;
+    });
+  } catch {
+    return [];
+  }
+  const consumed = new Set<NarrationProjectEntry>();
+  const timings: NarrationTiming[] = [];
+  for (const [index, cue] of cues.entries()) {
+    const entry = entries.find(item => !consumed.has(item) && normalizeText(item.text) === normalizeText(cue.text));
+    if (!entry) continue;
+    consumed.add(entry);
+    const takePath = path.resolve(path.dirname(projectPath), entry.processed_take_path!);
+    if (entries.some(item => item !== entry && path.resolve(path.dirname(projectPath), item.processed_take_path!).toLowerCase() === takePath.toLowerCase())) continue;
+    try {
+      const take = await fs.promises.stat(takePath);
+      if (!take.isFile() || take.size === 0) continue;
+      if (typeof entry.raw_take_path === 'string' && entry.raw_take_path) {
+        const raw = await fs.promises.stat(path.resolve(path.dirname(projectPath), entry.raw_take_path)).catch(() => undefined);
+        if (raw && raw.mtimeMs > take.mtimeMs) continue;
+      }
+      timings.push({ cueIndex: index + 1, text: cue.text, durationMs: entry.processed_duration_ms! });
+    } catch {
+      continue;
+    }
+  }
+  return timings;
 }
 
 export async function loadNarrationTimings(

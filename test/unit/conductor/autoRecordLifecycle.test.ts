@@ -50,6 +50,32 @@ interface StopRecordingHarness {
 }
 
 describe('Conductor Auto-Record lifecycle', () => {
+  it('rejects an over-budget plan before starting the recorder', async () => {
+    const conductor = Object.create(Conductor.prototype) as any;
+    const slide = createSlide(0, '# Slide', '<h1>Slide</h1>');
+    slide.fragmentCount = 0;
+    slide.cues = ['The complete explanation.'];
+    let starts = 0;
+    Object.assign(conductor, {
+      deck: createDeck('/deck.md', [slide], { recording: { maxDuration: '2s' } }),
+      outputChannel: { appendLine: () => {} },
+      autoPilotRunning: false, currentSlideIndex: 0,
+      pendingVideoNarrationCues: new Map(), narrationTimings: [],
+      recordingState: { isRecording: () => false },
+      webviewProvider: { prepareRecordingLayout: async () => [{ fragmentCount: 0, actionFragments: {} }] },
+      startRecording: async () => { starts++; },
+    });
+    let failure: unknown;
+    try {
+      await conductor.autoRecord([{ cueIndex: 1, text: slide.cues[0], durationMs: 3000 }]);
+    } catch (error) {
+      failure = error;
+    }
+    expect(String(failure)).to.include('exceeds');
+    expect(starts).to.equal(0);
+    expect(conductor.isAutoPilotActive()).to.equal(false);
+  });
+
   it('clears the running flag when recorder startup throws', async () => {
     const harness = Object.create(Conductor.prototype) as AutoRecordHarness;
     harness.deck = createDeck('/deck.md', [createSlide(0, '# Slide', '<h1>Slide</h1>')]);

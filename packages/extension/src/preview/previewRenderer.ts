@@ -16,8 +16,10 @@ import { parseRenderDirectives } from '@deckpilot/core/renderer/renderDirectiveP
 import type { RenderDirective } from '@deckpilot/core/renderer/renderDirectiveParser';
 import { peekCommandCache } from '../renderer/commandRenderer';
 import { appearanceCss, type ResolvedAppearance } from '@deckpilot/core/models/appearance';
+import { formatBudgetTime, type TimingSummary } from '../recording/durationBudget';
 
 export interface RenderPreviewOptions {
+  timing?: TimingSummary;
   initialBlocks?: Array<{ blockId: string; html: string }>;
   appearance?: ResolvedAppearance;
   fontsUri?: vscode.Uri;
@@ -63,6 +65,7 @@ export function renderPreviewHtml(deck: Deck, opts: RenderPreviewOptions): strin
       <span class="preview-count">${slideCount} slide${slideCount === 1 ? '' : 's'} &middot; live preview</span>
     </span>
   </header>
+  ${opts.timing ? renderTimingSummary(opts.timing) : ''}
   ${warningsHtml}
   <main class="preview-slides">
     ${slidesHtml}
@@ -206,6 +209,17 @@ export function renderPreviewHtml(deck: Deck, opts: RenderPreviewOptions): strin
   </script>
 </body>
 </html>`;
+}
+
+function renderTimingSummary(timing: TimingSummary): string {
+  const remaining = timing.maxDurationMs === undefined ? '' : timing.overByMs > 0
+    ? `Shorten ${formatBudgetTime(timing.overByMs)}`
+    : `${formatBudgetTime(Math.floor((timing.maxDurationMs - timing.plannedMs) / 1000) * 1000)} planned headroom`;
+  return `<section class="preview-timing${timing.overByMs > 0 ? ' preview-timing--over' : ''}" aria-label="Video duration" role="status">
+    <div><strong>~${formatBudgetTime(timing.plannedMs)} planned</strong>${timing.maxDurationMs === undefined ? '' : ` <span>Limit ${formatBudgetTime(timing.maxDurationMs)}</span>`} <strong>${remaining}</strong></div>
+    <div><span>Measured narration ${formatBudgetTime(timing.measuredNarrationMs)}</span><span>Estimated narration ${formatBudgetTime(timing.estimatedNarrationMs)}</span><span>${timing.measuredCues}/${timing.measuredCues + timing.estimatedCues} takes measured</span></div>
+    <div><span>Pauses and overhead ~${formatBudgetTime(timing.overheadMs)}</span>${timing.unknownRuntime ? '<span>Action/video runtime not fully known</span>' : ''}<span>Final video not verified</span></div>
+  </section>`;
 }
 
 export function renderPreviewError(message: string, opts: RenderPreviewOptions): string {
