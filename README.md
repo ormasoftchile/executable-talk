@@ -78,7 +78,7 @@ Deckpilot can auto-present your deck and coordinate with an external recorder to
 - Inline voice cues — `<!-- voice: text -->` and `<!-- voice[N]: text -->` remain supported and take precedence over sidecar cues
 - Manual recording — start/stop session; pause/resume timing, retake markers, narration markers
 - **Auto-Pilot** — hands-free: drives slides, fragments, and actions at a pace computed from voice cue word count
-- External recorder — configure ffmpeg (or any tool) to start/stop automatically via settings
+- External recorder — FFmpeg works by default on Windows; custom recorder commands remain configurable
 - Exports — paired MP4/SRT files, `voiceover-script.md`, `voiceover-script.json`, and `recording-session.json`
 
 ### 4. Onboarding & validation
@@ -265,7 +265,7 @@ interactive.
 ### 4. Record a narrated demo
 
 1. Write a `.deck.md` deck and put ordered narration cues in its `.deck.yaml` sidecar
-2. Configure an external recorder in VS Code settings (e.g. ffmpeg)
+2. On Windows, install FFmpeg on `PATH`; on other platforms, configure an external recorder in VS Code settings
 3. With the deck open, run **Deckpilot: Record or Update Narration**
 4. Record pending cues in srt-dubber, then quit. Existing takes whose normalized
   cue text is unchanged are reused, even when cues move; only added or edited cues
@@ -362,25 +362,18 @@ manifest, voice-over scripts, a staged narration project, and the final
 
 ### Record only the VS Code window on Windows
 
-Use Deckpilot's window-bound placeholders as `gdigrab` input options. Add this
-to the workspace's `.vscode/settings.json`:
+Install FFmpeg on `PATH` and run **Deckpilot: Auto-Record Deck** from the VS Code
+window you want captured. No recorder command is required: Windows defaults to
+FFmpeg at 30 fps with H.264 video, and `deckPilot.recording.windowScope` defaults
+to `focused`.
 
-```json
-{
-  "deckPilot.recording.startCommand": "ffmpeg -hide_banner -loglevel error -y -f gdigrab -draw_mouse 0 -framerate 30 -offset_x {{windowX}} -offset_y {{windowY}} -video_size {{windowWidth}}x{{windowHeight}} -i desktop -vf \"crop=trunc(iw/2)*2:trunc(ih/2)*2\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p \"{{outputPath}}\"",
-  "deckPilot.recording.outputDir": "./recordings",
-  "deckPilot.recording.outputExtension": "mp4"
-}
-```
+Custom `deckPilot.recording.startCommand` and legacy recorder commands take
+precedence over the built-in command. Set `deckPilot.recording.windowScope` to
+`screen` for full-desktop capture. macOS and Linux still require a recorder command.
 
-`-offset_x`, `-offset_y`, and `-video_size` must appear before `-i desktop`;
-otherwise `gdigrab` captures the entire virtual desktop. Start Auto-Record
-from the VS Code window you want captured. The crop filter removes at most one
-pixel from odd-sized windows because H.264 `yuv420p` requires even dimensions.
-On Windows, Deckpilot resolves the visible frame in physical pixels using DWM,
-including negative offsets and mixed-DPI multi-monitor layouts. If physical
-window bounds cannot be resolved, recording fails instead of falling back to a
-desktop region that could expose another monitor.
+Deckpilot resolves focused-window bounds in physical pixels and adjusts odd-sized
+dimensions for H.264. If those bounds cannot be resolved, recording fails instead
+of capturing another desktop region.
 
 ### Validate the recording workflow
 

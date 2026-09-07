@@ -34,6 +34,9 @@ export interface RecorderConfig {
 
 export type RecordingWindowScope = 'focused' | 'screen';
 
+const WINDOWS_DEFAULT_START_COMMAND = 'ffmpeg -hide_banner -loglevel error -y -f gdigrab -draw_mouse 0 ' +
+  '-framerate 30 -i desktop -vf "crop=trunc(iw/2)*2:trunc(ih/2)*2" ' +
+  '-c:v libx264 -preset ultrafast -pix_fmt yuv420p "{{outputPath}}"';
 const RECORDER_OUTPUT_READY_TIMEOUT_MS = 10_000;
 const RECORDER_OUTPUT_POLL_MS = 50;
 
@@ -133,7 +136,7 @@ export function getRecorderConfig(): RecorderConfig {
     return def;
   }
   return {
-    startCommand: get('startCommand', ''),
+    startCommand: get('startCommand', process.platform === 'win32' ? WINDOWS_DEFAULT_START_COMMAND : ''),
     stopCommand: get('stopCommand', ''),
     outputDir: get('outputDir', ''),
     outputExtension: get('outputExtension', 'mp4'),
