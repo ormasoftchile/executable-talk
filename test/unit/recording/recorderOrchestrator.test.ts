@@ -11,14 +11,92 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { RecorderMetadata } from '../../../packages/core/src/models/recording';
 import {
   applyWindowScopeToCommand,
+  getRecorderConfig,
   waitForRecorderOutput,
 } from '../../../packages/extension/src/recording/recorderOrchestrator';
 import { buildWindowsBoundsScript } from '../../../packages/extension/src/recording/windowsCaptureBounds';
 
 describe('RecorderOrchestrator — metadata model', () => {
+  describe('recorder configuration', () => {
+    const windowsCommand = 'ffmpeg -hide_banner -loglevel error -y -f gdigrab -draw_mouse 0 ' +
+      '-framerate 30 -i desktop -vf "crop=trunc(iw/2)*2:trunc(ih/2)*2" ' +
+      '-c:v libx264 -preset ultrafast -pix_fmt yuv420p "{{outputPath}}"';
+    const originalGetConfiguration = vscode.workspace.getConfiguration;
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    let settings: Record<string, string>;
+    let legacySettings: Record<string, string>;
+
+    beforeEach(() => {
+      settings = {};
+      legacySettings = {};
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      vscode.workspace.getConfiguration = ((section?: string) => ({
+        get: (key: string) => (section === 'executableTalk.recording' ? legacySettings : settings)[key],
+      })) as typeof vscode.workspace.getConfiguration;
+    });
+
+    afterEach(() => {
+      vscode.workspace.getConfiguration = originalGetConfiguration;
+      Object.defineProperty(process, 'platform', originalPlatform);
+    });
+
+    it('uses the FFmpeg default on Windows without configuration', () => {
+      const config = getRecorderConfig();
+
+      expect(config.startCommand).to.equal(windowsCommand);
+      expect(config.windowScope).to.equal('focused');
+      expect(config.stopCommand).to.equal('');
+      expect(config.outputExtension).to.equal('mp4');
+      const scopedCommand = applyWindowScopeToCommand(config.startCommand, 'win32', config.windowScope);
+      expect(scopedCommand).to.include('-video_size {{windowWidth}}x{{windowHeight}} -i desktop');
+      expect(scopedCommand).to.include('-vf "crop=trunc(iw/2)*2:trunc(ih/2)*2"');
+      expect(scopedCommand).to.include('"{{outputPath}}"');
+    });
+
+    it('uses the Windows default when both command settings are empty', () => {
+      settings.startCommand = '';
+      legacySettings.startCommand = '';
+
+      expect(getRecorderConfig().startCommand).to.equal(windowsCommand);
+    });
+
+    it('preserves a custom command ahead of the legacy command and default', () => {
+      settings.startCommand = 'custom-recorder start';
+      legacySettings.startCommand = 'legacy-recorder start';
+
+      expect(getRecorderConfig().startCommand).to.equal(settings.startCommand);
+    });
+
+    it('preserves a legacy command when the current setting is empty', () => {
+      settings.startCommand = '';
+      legacySettings.startCommand = 'legacy-recorder start';
+
+      expect(getRecorderConfig().startCommand).to.equal(legacySettings.startCommand);
+    });
+
+    it('preserves explicit full-screen capture with the Windows default', () => {
+      settings.windowScope = 'screen';
+      const config = getRecorderConfig();
+
+      expect(config.startCommand).to.equal(windowsCommand);
+      expect(applyWindowScopeToCommand(config.startCommand, 'win32', config.windowScope)).to.equal(windowsCommand);
+    });
+
+    for (const platform of ['darwin', 'linux']) {
+      it(`does not apply the Windows default on ${platform}`, () => {
+        Object.defineProperty(process, 'platform', { value: platform });
+
+        expect(getRecorderConfig().startCommand).to.equal('');
+        settings.startCommand = 'platform-recorder start';
+        expect(getRecorderConfig().startCommand).to.equal(settings.startCommand);
+      });
+    }
+  });
+
   describe('recorder readiness', () => {
     it('waits until the output file contains media bytes', async () => {
       const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'deckpilot-recorder-'));

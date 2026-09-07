@@ -217,7 +217,7 @@
         "deckPilot.recording.startCommand": {
           "type": "string",
           "default": "",
-          "description": "Shell command to launch an external screen recorder. Templates: {{outputPath}}, {{sessionId}}, {{windowX}}, {{windowY}}, {{windowWidth}}, and {{windowHeight}}. On Windows, pass the window values to gdigrab as -offset_x, -offset_y, and -video_size input options."
+          "description": "Shell command to launch an external screen recorder. Leave empty on Windows to use the built-in FFmpeg command (requires ffmpeg on PATH); other platforms require a command. Custom and legacy commands take precedence. Templates: {{outputPath}}, {{sessionId}}, {{windowX}}, {{windowY}}, {{windowWidth}}, and {{windowHeight}}. Focused scope automatically constrains plain Windows gdigrab desktop commands."
         },
         "deckPilot.recording.stopCommand": {
           "type": "string",
