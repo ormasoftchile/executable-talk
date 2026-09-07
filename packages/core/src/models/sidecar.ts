@@ -76,6 +76,7 @@ export interface SidecarScene {
 }
 
 export interface SidecarRecording {
+  maxDuration?: string | number;
   autoStart?: boolean;
   outputDir?: string;
   format?: string;

@@ -120,6 +120,7 @@ export interface DeckMetadata {
   diagrams?: DiagramDeckOptions;
   /** Recording configuration from sidecar (DA-20) */
   recording?: {
+    maxDuration?: string | number;
     autoStart?: boolean;
     outputDir?: string;
     format?: string;

@@ -19,6 +19,8 @@ import { DiagramService, annotateDiagramPlaceholders } from '../services/diagram
 import { AppearanceService } from '../services/appearanceService';
 import { appearanceCss, type ResolvedAppearance } from '@deckpilot/core/models/appearance';
 import type { Deck } from '@deckpilot/core/models/deck';
+import { loadDeckTiming } from '../recording/deckTiming';
+import { getRecorderConfig } from '../recording/recorderOrchestrator';
 
 const DEBOUNCE_MS = 150;
 const VIEW_TYPE = 'deckPilotPreview';
@@ -225,6 +227,13 @@ export class PreviewProvider implements vscode.Disposable {
     }
 
     const refreshVersion = ++this.refreshVersion;
+    let timingReport: Awaited<ReturnType<typeof loadDeckTiming>> | undefined;
+    let timingWarning: string | undefined;
+    try {
+      timingReport = await loadDeckTiming(result.deck, getRecorderConfig().outputDir);
+    } catch (error) {
+      timingWarning = `Timing unavailable: ${error instanceof Error ? error.message : String(error)}`;
+    }
     const initialBlocks = waitForDiagrams
       ? (await Promise.all(result.deck.slides.map(slide => this.diagramService.resolveSlideBlocks(slide.html, appearance, result.deck!.metadata.diagrams)))).flat()
       : undefined;
@@ -233,14 +242,16 @@ export class PreviewProvider implements vscode.Disposable {
     }
     this.panel.webview.html = renderPreviewHtml(result.deck, {
       ...renderOpts,
-      warnings: [...(result.warnings ?? []), ...appearance.warnings],
+      warnings: [...(result.warnings ?? []), ...appearance.warnings, ...(timingWarning ? [timingWarning] : [])],
       appearance,
       initialBlocks,
+      timing: timingReport?.timing,
     });
     if (!waitForDiagrams) {
       void this.resolvePreviewDiagrams(result.deck.slides.map((slide) => slide.html), refreshVersion);
     }
     const paths = new Set(collectWatchPaths(result.deck));
+    for (const timingPath of timingReport?.watchPaths ?? []) paths.add(timingPath);
     for (const extra of this.extraWatchPathsFromRaw(raw)) {
       paths.add(extra);
     }
