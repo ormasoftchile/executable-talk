@@ -7,6 +7,60 @@ import {
 } from '../../../packages/extension/src/recording/autoPilot';
 
 describe('AutoPilot narration timing', () => {
+  it('plays an explicitly assigned sidecar cue once during the editor demo hold', async () => {
+    const result = await parseDeck('# Preview\n\nText\n\n# Continue\n\nText', 'preview.deck.md');
+    const slide = result.deck!.slides[0];
+    slide.cues = ['Write.', 'Preview.', 'Refine.', 'Here is the source beside the live preview.'];
+    result.deck!.slides[1].cues = ['Continue the talk.'];
+    slide.interactiveElements = mapSidecarActionsToInteractiveElements([{
+      type: 'sequence', autoRecord: { viewMs: 8000, returnToDeck: true, cue: 4 },
+      steps: [{ type: 'vscode.command', id: 'deckPilot.openPreview' }],
+    }], 0);
+    const actionId = slide.interactiveElements[0].action.id;
+    const plan = buildAutoPilotPlan(result.deck!.slides, {}, [
+      { cueIndex: 4, text: 'Here is the source beside the live preview.', durationMs: 12000 },
+    ], new Map(), [{ fragmentCount: 4, actionFragments: { [actionId]: 4 } }]);
+    const trigger = plan.findIndex(step => step.type === 'trigger-action');
+    expect(plan.slice(0, trigger).flatMap(step => step.narrationCues ?? []).map(cue => cue.cueIndex))
+      .to.deep.equal([1, 2, 3]);
+    expect(plan[trigger + 1]).to.include({ type: 'restore-editors', durationMs: 12400 });
+    expect(plan[trigger + 1].narrationCues).to.deep.equal([{ cueIndex: 4, offsetMs: 0 }]);
+    expect(plan.flatMap(step => step.narrationCues ?? []).map(cue => cue.cueIndex))
+      .to.deep.equal([1, 2, 3, 4, 5]);
+  });
+
+  it('reserves an action cue on a static slide instead of narrating it before the action', async () => {
+    const result = await parseDeck('# Preview', 'preview.deck.md');
+    const slide = result.deck!.slides[0];
+    slide.fragmentCount = 0;
+    slide.cues = ['Explain the side view.'];
+    slide.interactiveElements = mapSidecarActionsToInteractiveElements([{
+      type: 'sequence', autoRecord: { viewMs: 8000, returnToDeck: true, cue: 1 },
+      steps: [{ type: 'vscode.command', id: 'deckPilot.openPreview' }],
+    }], 0);
+    const plan = buildAutoPilotPlan([slide]);
+    const narrated = plan.filter(step => step.narrationCues?.length);
+    expect(narrated).to.have.length(1);
+    expect(narrated[0]).to.include({ type: 'restore-editors', durationMs: 8000 });
+  });
+
+  it('rejects invalid or duplicate action cue references before recording', async () => {
+    const result = await parseDeck('# Preview', 'preview.deck.md');
+    const slide = result.deck!.slides[0];
+    slide.cues = ['Explain the side view.'];
+    for (const cue of [0, 2, -1, 1.5, '1']) {
+      slide.interactiveElements = mapSidecarActionsToInteractiveElements([{
+        type: 'sequence', autoRecord: { cue, returnToDeck: true }, steps: [],
+      }], 0);
+      expect(() => buildAutoPilotPlan([slide])).to.throw('autoRecord.cue');
+    }
+    slide.interactiveElements = mapSidecarActionsToInteractiveElements([
+      { type: 'sequence', autoRecord: { cue: 1, returnToDeck: true }, steps: [] },
+      { type: 'sequence', autoRecord: { cue: 1, returnToDeck: true }, steps: [] },
+    ], 0);
+    expect(() => buildAutoPilotPlan([slide])).to.throw('already assigned');
+  });
+
   it('uses rendered reveal counts and sidecar button positions for editor demos', async () => {
     const result = await parseDeck('# Demo\n\nPreview', 'preview.deck.md');
     const slide = result.deck!.slides[0];

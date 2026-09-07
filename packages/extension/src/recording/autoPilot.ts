@@ -154,7 +154,26 @@ export function buildAutoPilotPlan(
       continue;
     }
 
-    const slideCues = cues.filter(cue => cue.slideIndex === si && cue.offsetMs === undefined);
+    const allSlideCues = cues.filter(cue => cue.slideIndex === si && cue.offsetMs === undefined);
+    const actionCues = new Map<string, VoiceOverCue>();
+    const assignedCues = new Set<VoiceOverCue>();
+    for (const element of slide.interactiveElements) {
+      const reference = (element.action.params?.autoRecord as { cue?: unknown } | undefined)?.cue;
+      if (reference === undefined) {
+        continue;
+      }
+      if (typeof reference !== 'number' || !Number.isInteger(reference) || reference < 1 || reference > allSlideCues.length) {
+        throw new Error(`Slide ${si + 1}: autoRecord.cue must reference an existing cue by its 1-based slide-local index.`);
+      }
+      const cue = allSlideCues[reference - 1];
+      if (assignedCues.has(cue)) {
+        throw new Error(`Slide ${si + 1}: autoRecord.cue ${reference} is already assigned to another action.`);
+      }
+      actionCues.set(element.action.id, cue);
+      assignedCues.add(cue);
+    }
+    const unassignedCues = cues.filter(cue => !assignedCues.has(cue));
+    const slideCues = allSlideCues.filter(cue => !assignedCues.has(cue));
     const sequenceCuesAfterReveals = slide.fragmentCount > 0 &&
       slideCues.length > 0 &&
       slideCues.every(cue => cue.source !== 'comment');
@@ -172,7 +191,7 @@ export function buildAutoPilotPlan(
         });
       }
     } else if (!sequenceCuesAfterReveals) {
-      const slideCue = findCue(cues, si, undefined);
+      const slideCue = findCue(unassignedCues, si, undefined);
       const slideWait = calculateDisplayTime(
         slideCue?.text,
         cfg,
@@ -216,9 +235,9 @@ export function buildAutoPilotPlan(
       const entryElements = allElements.filter(el => !fragMap.has(el.action.id));
       for (const el of entryElements) {
         notableOrdinal++;
-        const actionCue = sequenceCuesAfterReveals
+        const actionCue = actionCues.get(el.action.id) ?? (sequenceCuesAfterReveals
           ? undefined
-          : findCue(cues, si, notableOrdinal);
+          : findCue(unassignedCues, si, notableOrdinal));
         addActionSteps(
           steps,
           el,
@@ -245,7 +264,7 @@ export function buildAutoPilotPlan(
         // Fragment cue wait — looked up by ordinal, not by fi
         const fragCue = sequenceCuesAfterReveals
           ? slideCues.length > 1 ? slideCues[fi - 1] : undefined
-          : findCue(cues, si, notableOrdinal);
+          : findCue(unassignedCues, si, notableOrdinal);
         const fragWait = calculateDisplayTime(
           fragCue?.text,
           cfg,
@@ -270,9 +289,9 @@ export function buildAutoPilotPlan(
         const fragElements = allElements.filter(el => fragMap.get(el.action.id) === fi);
         for (const el of fragElements) {
           notableOrdinal++;
-          const actionCue = sequenceCuesAfterReveals
+          const actionCue = actionCues.get(el.action.id) ?? (sequenceCuesAfterReveals
             ? undefined
-            : findCue(cues, si, notableOrdinal);
+            : findCue(unassignedCues, si, notableOrdinal));
           addActionSteps(
             steps,
             el,
@@ -305,7 +324,7 @@ export function buildAutoPilotPlan(
       // No fragments — trigger all interactive elements on slide load
       for (const el of slide.interactiveElements) {
         notableOrdinal++;
-        const actionCue = sequenceStaticCues ? undefined : findCue(cues, si, notableOrdinal);
+        const actionCue = actionCues.get(el.action.id) ?? (sequenceStaticCues ? undefined : findCue(unassignedCues, si, notableOrdinal));
         addActionSteps(
           steps,
           el,
